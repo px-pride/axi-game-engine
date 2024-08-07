@@ -15,6 +15,7 @@ Games occur in DMs with the bot. The bot conveys information about the game stat
 * Loading and saving customizable user profiles.
 * Message queue system with automatic flushing.
 * In-game text commands.
+* A new turn-based tactics game called *Wonder Wand*, found in `examples`.
 
 ## How do I try it?
 A version of this engine currently runs on our Discord servers, featuring the games provided in the `examples` directory.
