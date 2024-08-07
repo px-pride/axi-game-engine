@@ -19,11 +19,7 @@ Games occur in DMs with the bot. The bot conveys information about the game stat
 * A new turn-based tactics game called *Wonder Wand*, found in `examples`.
 
 ## How do I try it?
-A version of this engine currently runs on our Discord servers, featuring the games provided in the `examples` directory.
-
-You can join our main Discord here: https://discord.gg/EYXxETutEJ
-
-We also have a developer/tester Discord. Please DM me if you would like access. My Discord handle is @px_pride.
+We have a version of the bot running in our developer/tester Discord. Please DM me if you would like access. My Discord handle is @px_pride.
 
 ## What is Wonder Wand?
 Wonder Wand is a game written to explore the possibilities of more complex Discord games. Inspired by Pokemon and card games, Wonder Wand is a turn-based tactics game emphasizing customization, resource management, and reading your opponent. Give it a shot in our Discord!
