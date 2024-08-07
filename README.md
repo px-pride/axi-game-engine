@@ -9,6 +9,7 @@ The bot is powered primarily by slash commands. If you are using your bot for th
 Games occur in DMs with the bot. The bot conveys information about the game state at each step, and players input their decisions by reacting with emojis.
 
 ## What features does it have?
+* Multi-game launcher.
 * Single-player, multiplayer, and spectator modes.
 * Interactions with database and Discord API abstracted out.
 * Support for playing against CPUs, with some basic CPUs built in.
