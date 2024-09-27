@@ -1,0 +1,13 @@
+{
+    "name": "Wonder Wand Example League",
+    "description": "Ladder has begun!\nUse /queue to join.\n",
+    "game": "wonderwand",
+    "role": "ping_nobody",
+    "image": "",
+    "format": "danisen",
+    "duration": "4 hours",
+    "queue-channel": "spark-league-queue",
+    "status-channel": "spark-league-status",
+    "results-channel": "spark-league-results",
+    "leaderboard-channel": "spark-league-leaderboard"
+}

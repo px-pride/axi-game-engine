@@ -17,7 +17,6 @@ def get_user(guild, uid):
     users[uid] = AxiUser(uid)
     return users[uid]
 
-
 class AxiUser:
     # Wraps strings and Discord members.
 

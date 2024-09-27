@@ -10,8 +10,9 @@ The key is to set self.true_game when defining initialize_match_state().
 
 
 class AbstractModeSelector(AbstractDmGame, ABC):
-    def __init__(self, players, mode="versus"):
-        super().__init__(players, mode=mode)
+    def __init__(self, players, mode="versus", ladder=None, best_of=1, checkin_timer=None, label="UNRANKED"):
+        super().__init__(
+            players, mode=mode, ladder=ladder, best_of=best_of, checkin_timer=checkin_timer, label=label)
         self.true_game = None
 
     @abstractmethod

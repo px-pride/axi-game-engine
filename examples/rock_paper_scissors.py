@@ -9,7 +9,7 @@ class RockPaperScissors(AbstractDmGame):
             self.players.append(cpu)
             self.expected_num_decisions[cpu] = 1
         self.scores = {p: 0 for p in self.players}
-        self.first_to = 5
+        self.first_to = 3
         self.max_rounds = 20
         self.options = ["\N{ROCK}", "\N{SCROLL}", "\N{BLACK SCISSORS}"]
         self.round_num = 1
@@ -84,13 +84,13 @@ class RockPaperScissors(AbstractDmGame):
             self.scores[p_ls[0][0]] += 1
             msg += f"{p_ls[0][0]} wins the round.\n"
         msg += self.score_msg()
+        self.round_num += 1
         if max(self.scores.values()) < self.first_to:
             if self.round_num + 5 >= self.max_rounds:
                 msg += f"First to {self.first_to} points. Maximum {self.max_rounds} rounds.\n"
             else:
                 msg += f"First to {self.first_to} points.\n"
             msg += f"Round {self.round_num}. React with {self.options_str()}.\n"
-        self.round_num += 1
         for p in self.message_queue:
             self.message_queue[p].append((msg, None))
 

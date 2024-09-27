@@ -1,18 +1,22 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from axi.abstract_game import AbstractGame
 
 '''
 Your custom game will extend AbstractDmGame.
 It must implement the abstract methods described at the bottom of the class definition.
 '''
 
-class AbstractDmGame(ABC):
-    def __init__(self, players, mode="versus"):
-        self.players = players
-        self.mode = mode
+### TODO: best-of sets
+
+class AbstractDmGame(AbstractGame):
+    def __init__(self, players, mode="versus", ladder=None, best_of=1, checkin_timer=None, label="UNRANKED"):
+        super().__init__(
+            players, mode=mode, ladder=ladder, best_of=best_of, checkin_timer=checkin_timer, label=label)
         self.resigned = []
         self.spectators = []
-        self.match_over = False
         self.expected_num_decisions = {p: 1 for p in self.players}
+        for p in self.players:
+            self.checkins.add(p)
 
     def initialize_message_queue(self):
         self.message_queue = {p: [] for p in self.agents()}
@@ -101,15 +105,13 @@ class AbstractDmGame(ABC):
         return True
 
     def check_match_over(self):
-        if not self.match_over:
-            self.match_over = self.winner() is not None
-            if self.match_over:
-                for a in self.agents():
-                    messages = self.match_over_msg(a)
-                    if isinstance(messages, list):
-                        self.message_queue[a] += messages
-                    else:
-                        self.message_queue[a].append(messages)
+        if super().check_match_over():
+            for a in self.agents():
+                messages = self.match_over_msg(a)
+                if isinstance(messages, list):
+                    self.message_queue[a] += messages
+                else:
+                    self.message_queue[a].append(messages)
         return self.match_over
 
     @abstractmethod
@@ -154,7 +156,8 @@ class AbstractDmGame(ABC):
     def receive_command(self, p, c):
         pass
 
-    # Return type: (string, image_filename) or list of (string, image_filename)s
+
+   # Return type: (string, image_filename) or list of (string, image_filename)s
     # Description: These messages get sent to each agent at the start of the game.
     @abstractmethod
     def match_init_msg(self, p):
@@ -165,5 +168,4 @@ class AbstractDmGame(ABC):
     @abstractmethod
     def match_over_msg(self, p):
         pass
-
 
