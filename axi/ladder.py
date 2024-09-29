@@ -5,7 +5,6 @@ from numpy import abs
 from openskill import Rating
 from pytimeparse.timeparse import timeparse
 
-from axi.match_node import MatchNode
 from axi.util import rng, MATCH_STATUS_CALLED, USER_STATUS_QUEUED, USER_STATUS_BREAK, USER_STATUS_CALLED
 from axi.ratings.plackett_luce_extended import PlackettLuceExtended
 from axi.ratings.glicko_timeless import GlickoTimeless
