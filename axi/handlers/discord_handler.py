@@ -97,19 +97,14 @@ async def send_long(channel, x, file=None, sleeptime=None):
 
 @bot.command(name="sync")
 @has_permissions(ban_members=True)
-async def sync(ctx, scope: str = "guild"):
+# No global sync currently.
+async def sync(ctx):
     await ctx.channel.send("Syncing...")
-    if scope == "guild":
-        bot.tree.clear_commands(guild=ctx.guild)
-        bot.tree.copy_global_to(guild=ctx.guild)
-        await bot.tree.sync(guild=ctx.guild)
-        await ctx.channel.send(f"Synced for this guild ({ctx.guild.name})!")
-    elif scope == "global":
-        bot.tree.clear_commands(guild=None)
-        await bot.tree.sync()
-        await ctx.channel.send("Synced globally!")
-    else:
-        await ctx.channel.send("Invalid sync scope. Use 'guild' or 'global'.")
+    bot.tree.clear_commands(guild=ctx.guild)
+    #bot.tree.copy_global_to(guild=ctx.guild)
+    #await bot.tree.sync(guild=ctx.guild)
+    await bot.tree.sync()
+    await ctx.channel.send("Synced!")
 
 @bot.tree.command(name="help")
 async def help(ctx):
@@ -138,7 +133,7 @@ async def help(ctx):
     msg += 'Use */displayname* to set your display name.\n'
     msg += '\n'
     msg += '**Mod commands.**\n'
-    msg += 'Use */sync* to set up slash commands for your Discover server.\n'
+    msg += 'Use */sync* to set up slash commands for your Discord server.\n'
     msg += 'Use */report* to report the winner of a match.\n'
     msg += 'Use */cancel* to cancel a match.\n'
     msg += 'Use */ladder* to open a ladder for queueing.\n'
