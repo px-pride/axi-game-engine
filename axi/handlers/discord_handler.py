@@ -97,14 +97,19 @@ async def send_long(channel, x, file=None, sleeptime=None):
 
 @bot.command(name="sync")
 @has_permissions(ban_members=True)
-# No global sync currently.
-async def sync(ctx):
+async def sync(ctx, scope: str = "guild"):
     await ctx.channel.send("Syncing...")
-    bot.tree.clear_commands(guild=ctx.guild)
-    #bot.tree.copy_global_to(guild=ctx.guild)
-    #await bot.tree.sync(guild=ctx.guild)
-    await bot.tree.sync()
-    await ctx.channel.send("Synced!")
+    if scope == "guild":
+        bot.tree.clear_commands(guild=ctx.guild)
+        bot.tree.copy_global_to(guild=ctx.guild)
+        await bot.tree.sync(guild=ctx.guild)
+        await ctx.channel.send(f"Synced for this guild ({ctx.guild.name})!")
+    elif scope == "global":
+        bot.tree.clear_commands(guild=None)
+        await bot.tree.sync()
+        await ctx.channel.send("Synced globally!")
+    else:
+        await ctx.channel.send("Invalid sync scope. Use 'guild' or 'global'.")
 
 @bot.tree.command(name="help")
 async def help(ctx):
@@ -624,4 +629,3 @@ async def update_leaderboard_channel(l):
         await l.leaderboard_message.edit(content=msg)
     else:
         l.leaderboard_message = await send_long(leaderboard_channel, msg)
-
