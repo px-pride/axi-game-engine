@@ -183,8 +183,8 @@ def select_random_stream_match(l, pairings):
         matches.append(p)
     if not matches:
         return None
-    last_streamed_players = stream_history[l][-1][0].players if len(stream_history[l]) > 0 else []
-    second_last_streamed_players = stream_history[l][-2][0].players if len(stream_history[l]) > 1 else []
+    last_streamed_players = stream_history[l][-1] if len(stream_history[l]) > 0 else []
+    second_last_streamed_players = stream_history[l][-2] if len(stream_history[l]) > 1 else []
     stream_match = None
     for m in matches:
         p0 = m[0]

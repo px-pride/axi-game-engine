@@ -606,7 +606,7 @@ async def update_leaderboard_channel(l):
             elif round(dan) == 3:
                 suffix = 'rd'
             prefix = '+' if round(pos) >= 0 else ''
-            msg += f"*[{round(dan)}{suffix} Dan {prefix}{round(pos)}]* {user}\n"
+            msg += f"{str(i)}. *[{round(dan)}{suffix} Dan {prefix}{round(pos)}]* {str(user).replace('#0', '')} \n"
             display_name = user.name
             display_row = database_handler.load_entry_where(
                 "display_names",
