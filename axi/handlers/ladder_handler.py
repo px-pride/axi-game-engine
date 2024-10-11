@@ -552,6 +552,28 @@ def set_streamer(guild, channel, username):
         msg += f"Streamer set to {user} for {phase.name}.\n"
     return msg
 
+def nostream(guild, channel):
+    msg = ''
+    scope = channel
+    if (guild, scope) not in ladders:
+        options = get_ladders_in_guild(guild)
+        if not options:
+            msg += "No active ladders on this server.\n"
+            return msg
+        msg += f"No active ladder in this channel. Maybe you meant one of these channels:\n"
+        for x in options:
+            msg += f"* {x}\n"
+        return msg
+    msg = ""
+    phase = ladders[(guild, scope)]
+    if phase.completed():
+        msg += f"Sorry, the ladder is closed.\n"
+    else:
+        streamers[phase] = None
+        phase.streamed = False
+        msg += f"Streamer successfully removed.\n"
+    return msg
+
 async def challenge(caller, guild, channel, opponent):
     user = user_handler.get_user(guild, caller)
     opp = user_handler.get_user(guild, opponent)

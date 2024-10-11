@@ -3,6 +3,8 @@ from traceback import format_exc
 from copy import copy
 from json import load
 from datetime import datetime, timedelta, timezone
+
+import discord.app_commands
 from pytimeparse.timeparse import timeparse
 
 from discord import Intents, File, Member, User, Thread
@@ -143,11 +145,12 @@ async def help(ctx):
     msg += 'Use */cancel* to cancel a match.\n'
     msg += 'Use */ladder* to open a ladder for queueing.\n'
     msg += 'Use */setstreamer* to select a streamer for the ladder.\n'
+    msg += 'Use */nostream* to remove the streamer.\n'
     msg += 'Use */clearevents* to delete all Discord server events.\n'
     msg += '\n'
     await ctx.response.send_message(msg)
 
-@bot.tree.command(name="games")
+@bot.tree.command(name="games", description="Use /games to view the game list.")
 async def games(ctx):
     msg = "List of DM games:\n"
     for g in axi.dm_games:
@@ -162,7 +165,7 @@ async def games(ctx):
     msg += "Use /solo or /versus to play!\n"
     await ctx.response.send_message(msg)
 
-@bot.tree.command(name="versus")
+@bot.tree.command(name="versus", description="Use /solo or /versus to play.")
 async def versus(ctx, game: str, opponent: str):
     if game not in axi.dm_games and game not in axi.thread_games:
         await ctx.response.send_message("Invalid game. Use /games to see the game list.\n")
@@ -222,7 +225,7 @@ async def create_versus_match_ux(match, game, channel, ctx=None):
             msg += '\n'
             await send_long(match.discord_thread, msg, file='', sleeptime=0.8)
 
-@bot.tree.command(name="solo")
+@bot.tree.command(name="solo", description="Use /solo or /versus to play.")
 async def solo(ctx, game: str, mode: str):
     if game not in axi.dm_games:
         if game in axi.thread_games:
@@ -259,7 +262,7 @@ async def solo(ctx, game: str, mode: str):
                 for o in match.get_options(p):
                     await discord_message.add_reaction(o)
 
-@bot.tree.command(name="spectate")
+@bot.tree.command(name="spectate", description="Use /spectate to watch someone else\'s gameplay.")
 async def spectate(ctx, player: str):
     user = user_handler.get_user(ctx.guild, ctx.user)
     player = user_handler.get_user(ctx.guild, player)
@@ -283,7 +286,7 @@ async def spectate(ctx, player: str):
         files = [m[1] for m in messages]
         await send_long(user, msgs, file=files, sleeptime=0.8)
 
-@bot.tree.command(name="abort")
+@bot.tree.command(name="abort", description="Use /abort to stop playing or spectating.")
 async def abort(ctx):
     user = user_handler.get_user(ctx.guild, ctx.user)
     if not ctx.guild:
@@ -310,7 +313,7 @@ async def abort(ctx):
         else:
             await ctx.response.send_message(f"Abort requested. Both players must confirm.")
 
-@bot.tree.command(name="win")
+@bot.tree.command(name="win", description="Use /win to report that you won the match. Both players must confirm.")
 async def win(ctx):
     if ctx.channel not in match_handler.discord_threads_to_matches:
         await ctx.response.send_message(f"Use this command in your thread to report that you won your match!")
@@ -332,7 +335,7 @@ async def win(ctx):
     else:
         await ctx.response.send_message(f"Score reported. Both players must confirm.")
 
-@bot.tree.command(name="lose")
+@bot.tree.command(name="lose", description="Use /lose to report that you won the match. Both players must confirm.")
 async def lose(ctx):
     if ctx.channel not in match_handler.discord_threads_to_matches:
         await ctx.response.send_message(f"Use this command in your thread to report that you won your match!")
@@ -354,7 +357,7 @@ async def lose(ctx):
     else:
         await ctx.response.send_message(f"Score reported. Both players must confirm.")
 
-@bot.tree.command(name="report")
+@bot.tree.command(name="report", description="Use /report to report the winner of a match")
 @has_permissions(ban_members=True)
 async def report(ctx, winner: str):
     if ctx.channel not in match_handler.discord_threads_to_matches:
@@ -373,7 +376,7 @@ async def report(ctx, winner: str):
     else:
         await ctx.response.send_message(f"Score reported. Both players must confirm.")
 
-@bot.tree.command(name="ladder")
+@bot.tree.command(name="ladder", description="Use /ladder to open a ladder for queueing.")
 @has_permissions(ban_members=True)
 async def ladder(ctx, config_file: str):
     config = load(open(config_file))
@@ -410,25 +413,26 @@ async def ladder(ctx, config_file: str):
     ladder_handler.start_ladder(ctx.guild, config, scheduled_event)
     await ladder_handler.update_ladders()
 
-@bot.tree.command(name="queue")
+@bot.tree.command(name="queue", description="Use /queue to queue up for a ladder.")
 async def queue(ctx):
     msg = await ladder_handler.queue(ctx.user, ctx.guild, ctx.channel.name)
     await ctx.response.send_message(msg)
     await ladder_handler.update_ladders()
 
-@bot.tree.command(name="dequeue")
+@bot.tree.command(name="dequeue", description="Use /dequeue to dequeue from a ladder.")
 async def dequeue(ctx):
     msg = await ladder_handler.dequeue(ctx.user, ctx.guild, ctx.channel.name)
     await ctx.response.send_message(msg)
     await ladder_handler.update_ladders()
 
-@bot.tree.command(name="autoqueue")
+@bot.tree.command(name="autoqueue", description="Use /autoqueue on or /autoqueue off to automatically re-queue after each match.\n")
 async def autoqueue(ctx, mode: str):
     msg = await ladder_handler.autoqueue(ctx.user, ctx.guild, ctx.channel.name, mode)
     await ctx.response.send_message(msg)
     await ladder_handler.update_ladders()
 
-@bot.tree.command(name="cancel")
+@bot.tree.command(name="cancel", description="Use /cancel to cancel a match.")
+@discord.app_commands.default_permissions(ban_members=True)
 @has_permissions(ban_members=True)
 async def cancel(ctx):
     if ctx.channel not in match_handler.discord_threads_to_matches:
@@ -447,7 +451,7 @@ async def cancel(ctx):
     else:
         await ctx.response.send_message(f"Abort requested. Both players must confirm.")
 
-@bot.tree.command(name="doubleblind")
+@bot.tree.command(name="doubleblind", description="Use /doubleblind to perform double-blind character selection")
 async def doubleblind(ctx):
     if ctx.channel not in match_handler.discord_threads_to_matches:
         await ctx.response.send_message(f"Use this command in your thread to select characters double-blind with your opponent!")
@@ -465,7 +469,7 @@ async def doubleblind(ctx):
     match = match_handler.launch_match("doubleblind", [user, match.opponent(user)])
     await create_versus_match_ux(match, "doubleblind", ctx.channel, ctx=ctx)
 
-@bot.tree.command(name="lag")
+@bot.tree.command(name="lag", description="Use /lag to see lag test instructions.")
 async def lag(ctx):
     msg = ''
     msg += '**PLEASE FOLLOW THESE LAG TEST INSTRUCTIONS.**\n\n'
@@ -478,29 +482,38 @@ async def lag(ctx):
     msg += f'Ping the TOs for an in-game connection test if a PC performance issue is suspected (consistent low frame rate).\n'
     await ctx.response.send_message(msg)
 
-@bot.tree.command(name="challenge")
+@bot.tree.command(name="challenge", description="Use /challenge to directly challenge someone to a ranked match.")
 async def challenge(ctx, opponent: str):
     msg = await ladder_handler.challenge(ctx.user, ctx.guild, ctx.channel.name, opponent)
     await ctx.response.send_message(msg)
     await ladder_handler.update_ladders()
 
-@bot.tree.command(name="status")
+@bot.tree.command(name="status", description="Use /status to check your status in the ladder.")
 async def status(ctx):
     msg = await ladder_handler.status(ctx.user, ctx.guild, ctx.channel.name)
     await ctx.response.send_message(msg)
 
-@bot.tree.command(name="history")
+@bot.tree.command(name="history", description="Use /history to check your match history this session.")
 async def history(ctx):
     msg = await ladder_handler.history(ctx.user, ctx.guild, ctx.channel.name)
     await ctx.response.send_message(msg)
 
-@bot.tree.command(name="setstreamer")
+@bot.tree.command(name="setstreamer", description="Use /setstreamer to select a streamer for the ladder.")
+@discord.app_commands.default_permissions(ban_members=True)
 @has_permissions(ban_members=True)
 async def setstreamer(ctx, streamer: str):
     msg = ladder_handler.set_streamer(ctx.guild, ctx.channel.name, streamer)
     await ctx.response.send_message(msg)
 
-@bot.tree.command(name="clearevents")
+@bot.tree.command(name="nostream", description="Use /nostream to remove the streamer.")
+@discord.app_commands.default_permissions(ban_members=True)
+@has_permissions(ban_members=True)
+async def nostream(ctx):
+    msg = ladder_handler.nostream(ctx.guild, ctx.channel.name)
+    await ctx.response.send_message(msg)
+
+@bot.tree.command(name="clearevents", description="Use /clearevents to delete all Discord server events.")
+@discord.app_commands.default_permissions(ban_members=True)
 @has_permissions(ban_members=True)
 async def clearevents(ctx):
     for event in list(ctx.guild.scheduled_events):
@@ -508,7 +521,7 @@ async def clearevents(ctx):
         await event.delete()
     await ctx.response.send_message("Events cleared.")
 
-@bot.tree.command(name="displayname")
+@bot.tree.command(name="displayname", description="Use /displayname to set your display name.")
 async def displayname(ctx, name: str):
     database_handler.add_entry(
         "display_names",
