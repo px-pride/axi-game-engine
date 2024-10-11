@@ -17,9 +17,10 @@ class Danisen:
         delta_pos_l = 0
 
         potential_delta_pos_w = 1
+        potential_delta_pos_l = -1
         if dan_w <= dan_l:
             potential_delta_pos_w = 2 + max(0, dan_l - dan_w)
-        potential_delta_pos_l = -1
+            potential_delta_pos_l = -2 - max(0, dan_l - dan_w)
         if pos_w + potential_delta_pos_w > 4:
             delta_dan_w += 1
             delta_pos_w = -pos_w
@@ -28,8 +29,8 @@ class Danisen:
         if pos_l + potential_delta_pos_l < -4:
             delta_dan_l -= 1
             delta_pos_l = -pos_l
-        elif dan_l > 1 or pos_l > 0:
-            delta_pos_l -= 1
+        else:
+            delta_pos_l -= potential_delta_pos_w
 
         result = [[delta_dan_w, delta_pos_w], [delta_dan_l, delta_pos_l]]
         return result
