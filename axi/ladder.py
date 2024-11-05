@@ -321,6 +321,8 @@ class Ladder:
                 self.ratings_by_player[p1][0] + delta_result[1][0],
                 self.ratings_by_player[p1][1] + delta_result[1][1],
         )
+        if self.ratings_by_player[p1][0] < 1 or (self.ratings_by_player[p1][0] == 1 and self.ratings_by_player[p1][1] < 0):
+            self.ratings_by_player[p1] = (1, 0)
         ladder_handler.update_ratings_db(self, [p0, p1])
 
     def generate_pairings(self, available):
