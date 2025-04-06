@@ -21,6 +21,13 @@
 - Implemented the Ladder system for player rankings
 - Added Glicko-2 timeless rating system
 
+## Bug Fixes - April 6, 2025
+
+- Fixed logger initialization in Axi class
+- Fixed player handling in ScheduleHandler and MatchHandler 
+- Added proper error handling to example_main.py
+- Implemented basic logging configuration
+
 ## Next Steps
 
 - [ ] Implement the remaining rating systems:
@@ -38,7 +45,7 @@
 - Discord integration is mocked and doesn't actually connect to Discord
 - Only implemented one rating system (Glicko-2 timeless)
 - No unit tests yet
-- No proper error handling for edge cases
+- Some edge cases might not be properly handled
 
 ## Design Decisions
 
