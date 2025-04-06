@@ -78,8 +78,7 @@ class MatchHandler:
         """
         Resolve player IDs to player objects.
         
-        In a real implementation, this would use a user handler or player registry.
-        For simplicity, we'll create dummy player objects.
+        This creates actual player instances for use in games.
         
         Args:
             player_ids (list): List of player IDs
@@ -89,15 +88,31 @@ class MatchHandler:
         """
         players = []
         
+        # Try to use the user_handler if available in the engine
+        if hasattr(self, 'user_handler') and self.user_handler:
+            return self.user_handler.get_player_instances(player_ids)
+            
+        # Fallback to creating simple player instances
         for player_id in player_ids:
             # Check if it's a CPU player
             if player_id.startswith("CPU-"):
-                # Import only when needed to avoid circular imports
-                from ..simple_cpu import SimpleCPU
-                player = SimpleCPU(player_id)
+                try:
+                    # Import only when needed to avoid circular imports
+                    from ..simple_cpu import SimpleCPU
+                    player = SimpleCPU(player_id)
+                except ImportError:
+                    # If import fails, create a basic player
+                    player = type('Player', (), {
+                        'id': player_id, 
+                        'name': player_id,
+                        'get_move': lambda game_state: None  # Default move method
+                    })
             else:
                 # Create a simple player object
-                player = type('Player', (), {'id': player_id, 'name': player_id})
+                player = type('Player', (), {
+                    'id': player_id, 
+                    'name': player_id
+                })
                 
             players.append(player)
             

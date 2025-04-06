@@ -41,17 +41,20 @@ class ScheduleHandler:
             
         # If players is a dict (like from a user handler), extract the values
         if isinstance(players, dict):
-            players = list(players.values())
-            
-        # Extract player IDs if player objects were provided
-        player_ids = []
-        for player in players:
-            if isinstance(player, str):
-                player_ids.append(player)
-            elif hasattr(player, 'id'):
-                player_ids.append(player.id)
-            else:
-                self.logger.warning(f"Unrecognized player object format: {player}")
+            # Extract player IDs from the user dictionary
+            player_ids = list(players.keys())
+        else:
+            # Extract player IDs if player objects were provided
+            player_ids = []
+            for player in players:
+                if isinstance(player, str):
+                    player_ids.append(player)
+                elif hasattr(player, 'id'):
+                    player_ids.append(player.id)
+                elif isinstance(player, dict) and 'id' in player:
+                    player_ids.append(player['id'])
+                else:
+                    self.logger.warning(f"Unrecognized player object format: {player}")
                 
         if not player_ids:
             self.logger.error("No valid players provided")
