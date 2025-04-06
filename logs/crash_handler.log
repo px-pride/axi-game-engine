@@ -1,0 +1,5 @@
+Starting monitoring at Sun Apr  6 16:39:32 2025
+Creating monitoring thread for process 303936 (command: python3 -m metaclaude.utils.dummy_process)
+Thread monitoring process 303936 for command: python3 -m metaclaude.utils.dummy_process
+Stopping all monitoring threads at Sun Apr  6 16:40:31 2025
+Monitoring stopped for process 303936

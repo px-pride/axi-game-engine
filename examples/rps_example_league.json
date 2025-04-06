@@ -1,0 +1,43 @@
+{
+  "name": "Rock Paper Scissors League",
+  "description": "An example league using the Rock-Paper-Scissors game",
+  "game": {
+    "module": "examples.rock_paper_scissors",
+    "class": "RockPaperScissors",
+    "config": {
+      "max_rounds": 5
+    }
+  },
+  "schedule": {
+    "type": "round_robin",
+    "rounds": 2,
+    "matches_per_round": 3
+  },
+  "ladder": {
+    "rating_system": "glicko_timeless",
+    "config": {
+      "initial_rating": 1500,
+      "initial_rd": 350,
+      "initial_volatility": 0.06
+    }
+  },
+  "users": {
+    "cpu_players": 4,
+    "cpu_player_class": "axi.simple_cpu.SimpleCPU"
+  },
+  "database": {
+    "type": "json",
+    "path": "data/rps_league.json"
+  },
+  "discord": {
+    "enabled": false,
+    "token": "",
+    "channel_id": "",
+    "event_image": "examples/assets/discord_event_cover_rps.png",
+    "header_images": {
+      "begin": "axi/assets/discord_header_begin.png",
+      "checkins": "axi/assets/discord_header_checkins.png",
+      "final_placements": "axi/assets/discord_header_final_placements.png"
+    }
+  }
+}

@@ -1,0 +1,270 @@
+2025-04-06 16:39:30 - metaclaude - INFO - Created new commands.txt file at /home/user/axi-game-engine/commands.txt
+2025-04-06 16:39:30 - metaclaude - INFO - Using commands.txt at absolute path: /home/user/axi-game-engine/commands.txt
+2025-04-06 16:39:30 - metaclaude - INFO - Created new CLAUDE.md file at /home/user/axi-game-engine/CLAUDE.md.
+2025-04-06 16:39:30 - metaclaude - INFO - Using CLAUDE.md at absolute path: /home/user/axi-game-engine/CLAUDE.md
+2025-04-06 16:39:30 - metaclaude - DEBUG - Using screen config file: /home/user/metaclaude_c/metaclaude/ui/screenrc.claude
+2025-04-06 16:39:30 - metaclaude - DEBUG - Session 0 is alive: Claude screen session exists
+2025-04-06 16:39:31 - metaclaude - DEBUG - Session 0 is alive: Claude screen session exists
+2025-04-06 16:39:31 - metaclaude - DEBUG - Generated unique screen session name: command_0_73b015ad
+2025-04-06 16:39:31 - metaclaude - DEBUG - Using screen config file: /home/user/metaclaude_c/metaclaude/ui/screenrc
+2025-04-06 16:39:32 - metaclaude - DEBUG - Session 0 is alive: Claude screen session exists
+2025-04-06 16:39:32 - metaclaude - INFO - Commands count: 1
+2025-04-06 16:39:32 - metaclaude - INFO - Command_statuses count: 1
+2025-04-06 16:39:32 - metaclaude - INFO - First command: python3 -m metaclaude.utils.dummy_process
+2025-04-06 16:39:32 - metaclaude - INFO - Started crash monitoring with thread-based approach
+2025-04-06 16:39:33 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:33 - metaclaude - DEBUG - Attaching to screen session with command: screen -x claude_process_8b4a24a8
+2025-04-06 16:39:34 - metaclaude - DEBUG - Attaching to screen session with command: screen -x command_0_73b015ad
+2025-04-06 16:39:34 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:35 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:36 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:37 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:38 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:39 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:40 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:41 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:42 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:43 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:44 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:45 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:46 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:47 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:48 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:49 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:50 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:51 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:52 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:53 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:54 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:55 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:56 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:57 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:58 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:39:59 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:00 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:01 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:02 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:03 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:04 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:05 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:06 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:07 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:08 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:09 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:10 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:11 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:12 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:13 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:14 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:15 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:16 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:17 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:18 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:19 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:20 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:21 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:22 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:23 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:24 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:25 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:26 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:27 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:28 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:29 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:30 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:31 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:31 - metaclaude - DEBUG - Accepted connection from 
+2025-04-06 16:40:31 - metaclaude - DEBUG - Accepted connection from 
+2025-04-06 16:40:31 - metaclaude - INFO - Received command: submit_to_claude
+2025-04-06 16:40:31 - metaclaude - INFO - Starting submit_to_claude for claude_process_8b4a24a8 in separate thread
+2025-04-06 16:40:31 - metaclaude - INFO - Request to submit to Claude for session: 'claude_process_8b4a24a8'
+2025-04-06 16:40:31 - metaclaude - INFO - Available claude sessions: ['claude_process_8b4a24a8']
+2025-04-06 16:40:31 - metaclaude - INFO - Found session with UID 0, submitting to Claude
+2025-04-06 16:40:31 - metaclaude - DEBUG - Released screen session name: command_0_73b015ad
+2025-04-06 16:40:31 - metaclaude - INFO - All monitoring threads signaled to stop
+2025-04-06 16:40:32 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:33 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:34 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:34 - metaclaude - INFO - Submission to Claude completed
+2025-04-06 16:40:34 - metaclaude - INFO - submit_to_claude for claude_process_8b4a24a8 completed successfully
+2025-04-06 16:40:35 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:36 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:37 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:38 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:39 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:40 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:41 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:42 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:43 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:44 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:45 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:46 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:47 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:48 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:49 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:50 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:51 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:52 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:53 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:54 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:55 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:56 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:57 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:58 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:40:59 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:00 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:01 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:02 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:03 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:04 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:05 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:06 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:07 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:08 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:09 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:10 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:11 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:12 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:13 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:14 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:15 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:16 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:17 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:18 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:19 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:20 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:21 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:22 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:23 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:24 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:25 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:26 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:27 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:28 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:29 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:30 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:31 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:32 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:33 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:34 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:35 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:36 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:37 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:38 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:39 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:40 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:41 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:42 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:43 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:44 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:45 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:46 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:47 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:48 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:49 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:50 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:51 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:52 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:53 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:54 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:55 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:56 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:58 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:41:59 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:00 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:01 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:02 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:03 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:04 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:05 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:06 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:07 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:08 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:09 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:10 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:11 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:12 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:13 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:14 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:15 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:16 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:17 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:18 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:19 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:20 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:21 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:22 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:23 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:24 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:25 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:26 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:27 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:28 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:29 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:30 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:31 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:32 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:33 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:34 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:35 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:36 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:37 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:38 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:39 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:40 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:41 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:42 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:43 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:44 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:45 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:46 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:47 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:48 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:49 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:50 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:51 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:52 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:53 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:54 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:55 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:56 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:57 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:58 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:42:59 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:00 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:01 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:02 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:03 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:04 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:05 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:06 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:07 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:08 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:09 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:10 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:11 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:12 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:13 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:14 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:15 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:16 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:17 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:18 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:19 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:20 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:21 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:22 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:23 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:24 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:25 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:26 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:27 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:28 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:29 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:30 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:31 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:32 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:33 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:34 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:35 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
+2025-04-06 16:43:36 - metaclaude - DEBUG - Session 0 is alive: tmux session exists
