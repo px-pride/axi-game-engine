@@ -7,6 +7,13 @@ import json
 import os
 import importlib
 import logging
+
+# Configure basic logging if not already configured
+if not logging.root.handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 from .handlers.database_handler import DatabaseHandler
 from .handlers.discord_handler import DiscordHandler
 from .handlers.ladder_handler import LadderHandler
@@ -29,9 +36,9 @@ class Axi:
             config_file (str): Path to the configuration JSON file
         """
         self.config_file = config_file
+        self.logger = logging.getLogger("axi")
         self.load_config()
         self.initialize_handlers()
-        self.logger = logging.getLogger("axi")
         
     def load_config(self):
         """Load configuration from the specified file."""
