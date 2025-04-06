@@ -68,6 +68,14 @@ Various handlers connect Axi to external services:
 - `ScheduleHandler`: Creates tournament schedules
 - `UserHandler`: Manages player information
 
+### Testing Framework
+
+The engine includes built-in testing support:
+
+- `TestDiscordHandler`: A specialized version of the Discord handler for testing Discord integration without requiring an actual Discord connection. It provides methods for verifying that messages are correctly formatted and sent at the appropriate times.
+
+To use the testing framework, set `"test_mode": true` in the Discord configuration section. This will automatically use the `TestDiscordHandler` instead of the regular `DiscordHandler`. See `examples/test_discord.py` for a demonstration.
+
 ## Walking Through an Example
 
 Let's trace the execution of a simple Rock-Paper-Scissors tournament:

@@ -53,10 +53,23 @@ class Axi:
     def initialize_handlers(self):
         """Initialize all the necessary handlers."""
         self.db_handler = DatabaseHandler(self.config.get("database", {}))
-        self.discord_handler = DiscordHandler(self.config.get("discord", {}))
+        
+        # Initialize Discord handler with support for test mode
+        discord_config = self.config.get("discord", {})
+        if discord_config.get("test_mode", False):
+            self.logger.info("Using TestDiscordHandler instead of DiscordHandler")
+            from .testing.test_discord_handler import TestDiscordHandler
+            self.discord_handler = TestDiscordHandler(discord_config)
+        else:
+            self.discord_handler = DiscordHandler(discord_config)
+            
         self.user_handler = UserHandler(self.db_handler, self.config.get("users", {}))
         self.ladder_handler = LadderHandler(self.config.get("ladder", {}))
+        
+        # Create match handler with reference to user handler
         self.match_handler = MatchHandler(self.config)
+        self.match_handler.user_handler = self.user_handler
+        
         self.schedule_handler = ScheduleHandler(self.config.get("schedule", {}))
         
     def load_game(self):

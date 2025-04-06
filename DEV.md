@@ -28,6 +28,14 @@
 - Added proper error handling to example_main.py
 - Implemented basic logging configuration
 
+## Testing Framework - April 6, 2025
+
+- Implemented TestDiscordHandler for testing Discord integration without actual Discord connection
+- Added verification methods to test message formatting and delivery
+- Created examples/test_discord.py to demonstrate the testing framework
+- Updated Axi class to conditionally use TestDiscordHandler when in test mode
+- Added documentation for the testing framework
+
 ## Next Steps
 
 - [ ] Implement the remaining rating systems:
@@ -38,6 +46,7 @@
 - [ ] Create unit tests for core components
 - [ ] Implement a more complex game example (Wonder Wand)
 - [ ] Add CLI interface for tournament management
+- [ ] Expand test framework to cover other components
 - [ ] Implement proper Discord bot integration using discord.py
 
 ## Known Issues
