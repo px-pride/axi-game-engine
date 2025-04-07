@@ -36,12 +36,15 @@
 - Updated Axi class to conditionally use TestDiscordHandler when in test mode
 - Added documentation for the testing framework
 
+## Documentation - April 6, 2025
+
+- Created comprehensive tutorial for the Discord testing system
+- Added detailed examples of how to use the TestDiscordHandler
+- Documented message verification techniques
+- Provided examples for integrating testing into development workflow
+
 ## Next Steps
 
-- [ ] Implement the remaining rating systems:
-  - [x] GlickoTimeless
-  - [ ] Danisen
-  - [ ] PlackettLuceExtended
 - [ ] Add more detailed documentation and usage examples
 - [ ] Create unit tests for core components
 - [ ] Implement a more complex game example (Wonder Wand)
@@ -52,7 +55,6 @@
 ## Known Issues
 
 - Discord integration is mocked and doesn't actually connect to Discord
-- Only implemented one rating system (Glicko-2 timeless)
 - No unit tests yet
 - Some edge cases might not be properly handled
 
