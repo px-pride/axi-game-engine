@@ -3,13 +3,12 @@ from dotenv import load_dotenv
 import axi.handlers.discord_handler as discord_handler
 import axi.handlers.database_handler as database_handler
 from axi.double_blind import DoubleBlind
+from axi.registry import dm_games, thread_games
 from pickle import dumps, loads
 from json import load
 
 load_dotenv()
 TOKEN = getenv('DISCORD_TOKEN')
-dm_games = dict()
-thread_games = dict()
 
 def add_dm_game(game_cls):
     game_key = game_cls.__name__

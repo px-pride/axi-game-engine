@@ -1,23 +1,28 @@
 from collections import defaultdict
 from copy import copy
-from discord.utils import get
 from axi.abstract_cpu import AbstractCPU
-import axi.handlers.discord_handler as discord_handler
-import axi.handlers.ladder_handler as ladder_handler
-import axi.axi as axi
+from axi.effects import (
+    SendUserMessages, SendToThread, SendToChannel,
+    PresentDecision, CreateMatchThread, ArchiveThread,
+    UpdateLadderUI, ScheduleCallback,
+)
+import axi.registry as registry
 from axi.thread_game import ThreadGame
 from axi.abstract_dm_game import AbstractDmGame
 
-users_to_dm_matches = dict()
-users_to_thread_matches = dict()
-decision_msgs_to_matches = dict()
-matches_to_decision_msgs = defaultdict(lambda: [])
-discord_threads_to_matches = dict()
+class MatchState:
+    def __init__(self):
+        self.users_to_dm_matches = dict()
+        self.users_to_thread_matches = dict()
+        self.matches_by_id = dict()
+
+state = MatchState()
+
 
 def launch_match(name, players, mode="versus", ladder=None, best_of=1, checkin_timer=None, label="UNRANKED"):
     match = None
-    if name in axi.dm_games:
-        candidate = axi.dm_games[name](
+    if name in registry.dm_games:
+        candidate = registry.dm_games[name](
             players, mode=mode, ladder=ladder, best_of=best_of, checkin_timer=checkin_timer, label=label)
         if not candidate.validate_mode():
             return None
@@ -26,121 +31,179 @@ def launch_match(name, players, mode="versus", ladder=None, best_of=1, checkin_t
         match.initialize_message_queue()
         match.refresh_decisions()
         for p in players:
-            users_to_dm_matches[p] = match
-    elif name in axi.thread_games:
-        match = ThreadGame(axi.thread_games[name],
+            state.users_to_dm_matches[p] = match
+    elif name in registry.thread_games:
+        match = ThreadGame(registry.thread_games[name],
             players, mode=mode, ladder=ladder, best_of=best_of, checkin_timer=checkin_timer, label=label)
         for p in players:
-            users_to_thread_matches[p] = match
+            state.users_to_thread_matches[p] = match
+    if match:
+        state.matches_by_id[id(match)] = match
     return match
 
-async def process_decision(user, decision):
+
+def prepare_match_ux(match, game_name, channel_name=None, guild_id=None, stream_notice=None, launch_message=None):
+    """Generate effects for setting up match UX after launch_match. Pure function."""
+    effects = []
+    if game_name in registry.dm_games:
+        for p in match.players:
+            messages = match.flush_message_queue(p)
+            if isinstance(p, AbstractCPU):
+                if match.expected_num_decisions[p] > 0:
+                    decision = p.compute(copy(match.get_options(p)))
+                    effects += process_decision(p, decision)
+            else:
+                if match.expected_num_decisions[p] > 0:
+                    effects.append(PresentDecision(
+                        user_id=p.uid.id,
+                        match_id=id(match),
+                        messages=messages,
+                        options=match.get_options(p)))
+                elif messages:
+                    effects.append(SendUserMessages(
+                        user_id=p.uid.id,
+                        messages=messages))
+    else:
+        thread_name = f"{match.players[0]} vs. {match.players[1]}"
+        init_messages = match.match_init_msg()
+        effects.append(CreateMatchThread(
+            match_id=id(match),
+            guild_id=guild_id,
+            channel_name=channel_name,
+            thread_name=thread_name,
+            init_messages=init_messages,
+            stream_notice=stream_notice,
+            launch_message=launch_message))
+    return effects
+
+
+def process_decision(user, decision):
+    effects = []
     if isinstance(user, AbstractCPU):
         match = user.match
-    elif user in users_to_dm_matches:
-        match = users_to_dm_matches[user]
+    elif user in state.users_to_dm_matches:
+        match = state.users_to_dm_matches[user]
     else:
-        return
+        return effects
     accepted = match.validate_decision(user, decision)
     messages = match.flush_message_queue(user)
     if len(messages) > 0 and not isinstance(user, AbstractCPU):
-        msgs = [m[0] for m in messages]
-        files = [m[1] for m in messages]
-        await discord_handler.send_long(user, msgs, file=files, sleeptime=0.8)
-    if decision == "abort" and user in users_to_dm_matches:
-        del users_to_dm_matches[user]
+        effects.append(SendUserMessages(user_id=user.uid.id, messages=messages))
+    if decision == "abort" and user in state.users_to_dm_matches:
+        del state.users_to_dm_matches[user]
     if not accepted:
-        return
+        return effects
     if match.check_all_decisions_in():
         if match.check_match_over():
-            await close_match(match)
+            effects += close_match(match)
         else:
-            for dm in matches_to_decision_msgs[match]:
-                del decision_msgs_to_matches[dm]
-            matches_to_decision_msgs[match] = []
-            await process_round(match)
+            effects += process_round(match)
+    return effects
 
-async def process_command(user, command):
-    if isinstance(user, AbstractCPU):
-        match = user.match
-    elif user in users_to_dm_matches:
-        match = users_to_dm_matches[user]
-    else:
-        return
-    if match.receive_command(user, command):
-        messages = match.flush_message_queue(user)
-        if len(messages) > 0 and not isinstance(user, AbstractCPU):
-            msgs = [m[0] for m in messages]
-            files = [m[1] for m in messages]
-            await discord_handler.send_long(user, msgs, file=files, sleeptime=0.8)
 
-async def process_round(match):
+def process_round(match):
+    effects = []
     match.match_step()
-    discord_messages = dict()
+
+    # Capture per-agent messages from the round
+    agent_messages = {}
     for p in match.agents():
         messages = match.flush_message_queue(p)
-        if len(messages) > 0 and not isinstance(p, AbstractCPU):
-            msgs = [m[0] for m in messages]
-            files = [m[1] for m in messages]
-            discord_messages[p] = await discord_handler.send_long(p, msgs, file=files, sleeptime=0.8)
-    match.refresh_decisions()
-    if match.check_match_over():
-        await close_match(match)
-    else:
-        for p in match.players:
-            if match.expected_num_decisions[p] > 0:
-                if isinstance(p, AbstractCPU):
-                    decision = p.compute(copy(match.get_options(p)))
-                    await process_decision(p, decision)
-                else:
-                    decision_msgs_to_matches[discord_messages[p]] = match
-                    matches_to_decision_msgs[match].append(discord_messages[p])
-                    for o in match.get_options(p):
-                        await discord_messages[p].add_reaction(o)
+        if messages and not isinstance(p, AbstractCPU):
+            agent_messages[p] = messages
 
-async def close_match(match):
+    match.refresh_decisions()
+
+    if match.check_match_over():
+        # Send round results first, then close_match sends game-over messages
+        for p, msgs in agent_messages.items():
+            effects.append(SendUserMessages(user_id=p.uid.id, messages=msgs))
+        effects += close_match(match)
+    else:
+        for p in match.agents():
+            if isinstance(p, AbstractCPU):
+                if p in match.players and match.expected_num_decisions[p] > 0:
+                    decision = p.compute(copy(match.get_options(p)))
+                    effects += process_decision(p, decision)
+                continue
+            msgs = agent_messages.get(p, [])
+            if p in match.players and match.expected_num_decisions[p] > 0:
+                effects.append(PresentDecision(
+                    user_id=p.uid.id,
+                    match_id=id(match),
+                    messages=msgs,
+                    options=match.get_options(p)))
+            elif msgs:
+                effects.append(SendUserMessages(
+                    user_id=p.uid.id,
+                    messages=msgs))
+
+    return effects
+
+
+def close_match(match):
+    effects = []
     if isinstance(match, AbstractDmGame):
         for p in match.agents():
             messages = match.flush_message_queue(p)
             if len(messages) > 0 and not isinstance(p, AbstractCPU):
-                msgs = [m[0] for m in messages]
-                files = [m[1] for m in messages]
-                await discord_handler.send_long(p, msgs, file=files, sleeptime=0.8)
+                effects.append(SendUserMessages(user_id=p.uid.id, messages=messages))
         for p in match.agents():
-            if p in users_to_dm_matches and users_to_dm_matches[p] == match:
-                del users_to_dm_matches[p]
+            if p in state.users_to_dm_matches and state.users_to_dm_matches[p] == match:
+                del state.users_to_dm_matches[p]
     elif isinstance(match, ThreadGame):
-        await match.discord_thread.edit(archived=True)
-        await discord_handler.send_long(
-            get(match.ladder.guild.channels, name=match.ladder.results_channel),
-            f"{match.winner()} defeats {match.loser()}!\n")
-        del discord_threads_to_matches[match.discord_thread]
+        effects.append(ArchiveThread(match_id=id(match)))
+        effects.append(SendToChannel(
+            guild_id=match.ladder.guild.id,
+            channel_name=match.ladder.results_channel,
+            messages=[(f"{match.winner()} defeats {match.loser()}!\n", None)]))
         for p in match.agents():
-            if p in users_to_thread_matches and users_to_thread_matches[p] == match:
-                del users_to_thread_matches[p]
+            if p in state.users_to_thread_matches and state.users_to_thread_matches[p] == match:
+                del state.users_to_thread_matches[p]
     if match.ladder:
         match.ladder.advance(match)
-        await ladder_handler.update_ladders()
+        effects.append(UpdateLadderUI(ladder_id=id(match.ladder)))
+    return effects
 
-async def cancel_match(match):
+
+def cancel_match(match):
+    effects = []
     if isinstance(match, ThreadGame):
-        await match.discord_thread.edit(archived=True)
-        del discord_threads_to_matches[match.discord_thread]
+        effects.append(ArchiveThread(match_id=id(match)))
     for p in match.agents():
-        if p in users_to_dm_matches and users_to_dm_matches[p] == match:
-            del users_to_dm_matches[p]
-        elif p in users_to_thread_matches and users_to_thread_matches[p] == match:
-            del users_to_thread_matches[p]
+        if p in state.users_to_dm_matches and state.users_to_dm_matches[p] == match:
+            del state.users_to_dm_matches[p]
+        elif p in state.users_to_thread_matches and state.users_to_thread_matches[p] == match:
+            del state.users_to_thread_matches[p]
     if match.ladder:
         match.ladder.abort(match)
-        await ladder_handler.update_ladders()
+        effects.append(UpdateLadderUI(ladder_id=id(match.ladder)))
+    return effects
 
-async def resolve_checkins(match):
+
+def resolve_checkins(match):
+    effects = []
     if isinstance(match, ThreadGame):
         for p in match.players:
             if p not in match.checkins:
-                await discord_handler.send_long(
-                    match.discord_thread, f"Check-in timer expired. Aborting match.\n")
-                await cancel_match(match)
-                return False
-    return True
+                effects.append(SendToThread(
+                    match_id=id(match),
+                    messages=[("Check-in timer expired. Aborting match.\n", None)]))
+                effects += cancel_match(match)
+                return effects
+    return effects
+
+
+def process_command(user, command):
+    effects = []
+    if isinstance(user, AbstractCPU):
+        match = user.match
+    elif user in state.users_to_dm_matches:
+        match = state.users_to_dm_matches[user]
+    else:
+        return effects
+    if match.receive_command(user, command):
+        messages = match.flush_message_queue(user)
+        if len(messages) > 0 and not isinstance(user, AbstractCPU):
+            effects.append(SendUserMessages(user_id=user.uid.id, messages=messages))
+    return effects

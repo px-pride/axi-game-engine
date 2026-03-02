@@ -1,31 +1,25 @@
-from time import time, sleep
+from time import time
 from copy import copy
-from discord.utils import get
 from axi.ladder import Ladder
 from axi.util import supported_ladder_formats, rng, USER_STATUS_QUEUED, USER_STATUS_BREAK, USER_STATUS_CALLED
-from axi.thread_game import ThreadGame
-import axi.handlers.user_handler as user_handler
+from axi.effects import UpdateLadderUI, ScheduleCallback
 import axi.handlers.database_handler as database_handler
-import axi.handlers.schedule_handler as schedule_handler
-import axi.handlers.discord_handler as discord_handler
 import axi.handlers.match_handler as match_handler
 
-ladders = dict()
-death_row = dict()
-streamers = dict()
-stream_pairs = dict()
-stream_history = dict()
-event_name = None
-downtime_minimum = 20
+class LadderState:
+    def __init__(self):
+        self.ladders = dict()
+        self.ladders_by_id = dict()
+        self.streamers = dict()
+        self.stream_pairs = dict()
+        self.stream_history = dict()
+        self.downtime_minimum = 20
 
-def get_db_entry():
-    return (
-        event_name,
-    )
+state = LadderState()
 
 def exists(guild, config):
     scope = config["queue-channel"]
-    return (guild, scope) in ladders
+    return (guild, scope) in state.ladders
 
 def format_supported(fmt):
     return fmt in supported_ladder_formats
@@ -34,10 +28,11 @@ def format_supported(fmt):
 def start_ladder(guild, config, scheduled_event):
     scope = config["queue-channel"]
     ladder = Ladder(guild, config, scheduled_event)
-    ladders[(guild, scope)] = ladder
-    stream_pairs[ladder] = None
-    streamers[ladder] = None
-    stream_history[ladder] = []
+    state.ladders[(guild, scope)] = ladder
+    state.ladders_by_id[id(ladder)] = ladder
+    state.stream_pairs[ladder] = None
+    state.streamers[ladder] = None
+    state.stream_history[ladder] = []
     #end_event = lambda g=ctx.guild, c=config: end_ladder(g, c)
     #await schedule_handler.schedule_event(end_time.timestamp(), end_event)
     add_to_db(ladder)
@@ -58,17 +53,19 @@ def add_to_db(ladder):
     else:
         ladder.rowid = database_handler.add_entry("ladders", ladder.get_db_entry())
 
-async def matchmaking():
+def matchmaking():
+    effects = []
+
     # Clear stream match if needed.
-    for l in ladders.values():
-        if stream_pairs[l] and l.get_matches_by_pair(stream_pairs[l][0], stream_pairs[l][1])[-1].check_match_over():
-            stream_pairs[l] = None
+    for l in state.ladders.values():
+        if state.stream_pairs[l] and l.get_matches_by_pair(state.stream_pairs[l][0], state.stream_pairs[l][1])[-1].check_match_over():
+            state.stream_pairs[l] = None
 
     # Identify available players by ladder.
     unoccupied = dict()
     queued_players = dict()
     occupied = set()
-    for phase in ladders.values():
+    for phase in state.ladders.values():
         if not phase.completed():
             for p in phase.players:
                 if p in occupied:
@@ -96,7 +93,7 @@ async def matchmaking():
     best_set_stream_match = dict()
     for k in range(1000):
         setting = dict()
-        for l in ladders.values():
+        for l in state.ladders.values():
             if not l.completed():
                 setting[l] = []
         for p in unoccupied:
@@ -106,10 +103,10 @@ async def matchmaking():
         # Create hypothesis.
         pairings = dict()
         set_stream_match = dict()
-        for l in ladders.values():
+        for l in state.ladders.values():
             if not l.completed():
                 pairings[l] = generate_pairing_hypothesis(l, setting[l])
-                set_stream_match[l] = select_random_stream_match(l, pairings[l]) if streamers[l] else None
+                set_stream_match[l] = select_random_stream_match(l, pairings[l]) if state.streamers[l] else None
 
         # Score hypothesis with stream match.
         score = score_hypothesis(
@@ -123,16 +120,18 @@ async def matchmaking():
     results = dict()
     for l in best_pairings:
         results[l] = l.matchmaking(best_pairings[l][0], best_pairings[l][1], best_set_stream_match[l])
-        stream_pairs[l] = best_set_stream_match[l]
+        state.stream_pairs[l] = best_set_stream_match[l]
         if best_set_stream_match[l]:
-            stream_history[l].append(best_set_stream_match[l])
-        start_time = time()
+            state.stream_history[l].append(best_set_stream_match[l])
         for m in results[l]:
-            await schedule_handler.schedule_event(
-                start_time + m.checkin_timer,
-                lambda m_=m:
-                    match_handler.resolve_checkins(m_), [m])
-    return results
+            if m.checkin_timer:
+                effects.append(ScheduleCallback(
+                    delay_seconds=m.checkin_timer,
+                    callback_name="resolve_checkins",
+                    callback_args={"match_id": id(m)},
+                    keys=m.players,
+                    suffix="checkin"))
+    return effects
 
 def generate_pairing_hypothesis(ladder, available):
     challenge_matches = []
@@ -154,7 +153,7 @@ def generate_pairing_hypothesis(ladder, available):
         p1 = available[j+1]
         clock0 = ladder.query_downtime_clock(p0)
         clock1 = ladder.query_downtime_clock(p1)
-        if clock0 < downtime_minimum or clock1 < downtime_minimum:
+        if clock0 < state.downtime_minimum or clock1 < state.downtime_minimum:
             continue
         viable = not ladder.matches_by_pair[p0][p1]
         if not viable:
@@ -183,8 +182,8 @@ def select_random_stream_match(l, pairings):
         matches.append(p)
     if not matches:
         return None
-    last_streamed_players = stream_history[l][-1] if len(stream_history[l]) > 0 else []
-    second_last_streamed_players = stream_history[l][-2] if len(stream_history[l]) > 1 else []
+    last_streamed_players = state.stream_history[l][-1] if len(state.stream_history[l]) > 0 else []
+    second_last_streamed_players = state.stream_history[l][-2] if len(state.stream_history[l]) > 1 else []
     stream_match = None
     for m in matches:
         p0 = m[0]
@@ -277,7 +276,7 @@ def score_hypothesis(pairings, stream_match_hypothesis):
     w_stream_match_called = 80      # ++
     w_stream_match_repeat = 30      # -
     w_stream_ladder_diversity = 95  # ++
-    desired_stream_ladder_ratio = {l: 1.0 / len(ladders) for l in ladders.values()}
+    desired_stream_ladder_ratio = {l: 1.0 / len(state.ladders) for l in ladders.values()}
 
     for l_ in stream_match_hypothesis:
         stream_pair = stream_match_hypothesis[l_]
@@ -302,12 +301,12 @@ def score_hypothesis(pairings, stream_match_hypothesis):
         # Value: stream ladder diversity.
         current_stream_ladder_ratio = dict()
         current_stream_ladder_sum = 0.0
-        for l in ladders.values():
+        for l in state.ladders.values():
             current_stream_ladder_ratio[l] = len(l.stream_history) + 0.1
             if l == l_:
                 current_stream_ladder_ratio[l] += 1
             current_stream_ladder_sum += current_stream_ladder_ratio[l]
-        for l in ladders.values():
+        for l in state.ladders.values():
             current_stream_ladder_ratio[l] /= current_stream_ladder_sum
             score += w_stream_ladder_diversity * abs(
                 current_stream_ladder_ratio[l] - desired_stream_ladder_ratio[l])
@@ -321,17 +320,16 @@ def score_hypothesis(pairings, stream_match_hypothesis):
 
 def get_ladders_in_guild(guild):
     result = []
-    for x in ladders:
+    for x in state.ladders:
         if x[0] != guild:
             continue
         result.append(x[1])
     return result
 
-async def queue(caller, guild, channel):
-    user = user_handler.get_user(guild, caller)
+def queue(user, guild, channel):
     msg = ''
     scope = channel
-    if (guild, scope) not in ladders:
+    if (guild, scope) not in state.ladders:
         options = get_ladders_in_guild(guild)
         if not options:
             msg += "No active ladders on this server.\n"
@@ -341,7 +339,7 @@ async def queue(caller, guild, channel):
             msg += f"* {x}\n"
         return msg
     msg = ""
-    phase = ladders[(guild, scope)]
+    phase = state.ladders[(guild, scope)]
     if phase.completed():
         msg += f"Sorry, the ladder is closed.\n"
     elif user not in phase.status_by_player:
@@ -359,11 +357,10 @@ async def queue(caller, guild, channel):
         msg += f"{user} is in a match!\n"
     return msg
 
-async def dequeue(caller, guild, channel):
-    user = user_handler.get_user(guild, caller)
+def dequeue(user, guild, channel):
     msg = ''
     scope = channel
-    if (guild, scope) not in ladders:
+    if (guild, scope) not in state.ladders:
         options = get_ladders_in_guild(guild)
         if not options:
             msg += "No active ladders on this server.\n"
@@ -373,7 +370,7 @@ async def dequeue(caller, guild, channel):
             msg += f"* {x}\n"
         return msg
     msg = ""
-    phase = ladders[(guild, scope)]
+    phase = state.ladders[(guild, scope)]
     if phase.completed():
         msg += f"Sorry, the ladder is closed.\n"
     elif user not in phase.status_by_player or phase.status_by_player[user] == USER_STATUS_BREAK:
@@ -383,11 +380,10 @@ async def dequeue(caller, guild, channel):
         phase.dequeue(user)
     return msg
 
-async def autoqueue(caller, guild, channel, mode):
-    user = user_handler.get_user(guild, caller)
+def autoqueue(user, guild, channel, mode):
     msg = ''
     scope = channel
-    if (guild, scope) not in ladders:
+    if (guild, scope) not in state.ladders:
         options = get_ladders_in_guild(guild)
         if not options:
             msg += "No active ladders on this server.\n"
@@ -397,7 +393,7 @@ async def autoqueue(caller, guild, channel, mode):
             msg += f"* {x}\n"
         return msg
     msg = ""
-    phase = ladders[(guild, scope)]
+    phase = state.ladders[(guild, scope)]
     if phase.completed():
         msg += f"Sorry, the ladder is closed.\n"
     elif user not in phase.status_by_player:
@@ -406,7 +402,7 @@ async def autoqueue(caller, guild, channel, mode):
             if mode == "on":
                 phase.autoqueue_by_player[user] = True
                 msg += f"{user} has turned autoqueue on.\n"
-                msg += await queue(caller, guild, channel)
+                msg += queue(user, guild, channel)
             elif mode == "off":
                 phase.autoqueue_by_player[user] = False
                 msg += f"{user} has turned autoqueue off.\n"
@@ -418,7 +414,7 @@ async def autoqueue(caller, guild, channel, mode):
         if mode == "on":
             phase.autoqueue_by_player[user] = True
             msg += f"{user} has turned autoqueue on.\n"
-            msg += await queue(caller, guild, channel)
+            msg += queue(user, guild, channel)
         elif mode == "off":
             phase.autoqueue_by_player[user] = False
             msg += f"{user} has turned autoqueue off.\n"
@@ -431,7 +427,7 @@ async def autoqueue(caller, guild, channel, mode):
         elif mode == "off":
             phase.autoqueue_by_player[user] = False
             msg += f"{user} has turned autoqueue off.\n"
-            msg += await dequeue(caller, guild, channel)
+            msg += dequeue(user, guild, channel)
         else:
             msg += f'Autoqueue mode must be "on" or "off".\n'
     elif phase.status_by_player[user] == USER_STATUS_CALLED:
@@ -445,28 +441,44 @@ async def autoqueue(caller, guild, channel, mode):
             msg += f'Autoqueue mode must be "on" or "off".\n'
     return msg
 
-async def update_ladders(echo=True):
+def update_ladders(echo=True):
+    effects = []
     if echo:
-        await schedule_handler.schedule_event(
-            time() + downtime_minimum + 5,
-            lambda: update_ladders(echo=False))
-    await matchmaking()
-    await call_matches()
-    await push_ladder_updates()
+        effects.append(ScheduleCallback(
+            delay_seconds=state.downtime_minimum + 5,
+            callback_name="update_ladders_no_echo",
+            callback_args={}))
+    effects += matchmaking()
+    effects += call_matches()
+    effects += push_ladder_updates()
+    return effects
 
-async def call_matches():
-    for l in ladders.values():
+def call_matches():
+    effects = []
+    for l in state.ladders.values():
         called = copy(l.called_matches)
-        channel = get(l.guild.channels, name=l.queue_channel)
         for m in called:
-            await discord_handler.create_versus_match_ux(m, l.game, channel)
+            launch_msg = f"Launching {l.game.upper()}: {m.players[0]} vs. {m.players[1]}.\n"
+            stream_notice = None
+            if m.streamed and state.streamers.get(l):
+                streamer = state.streamers[l]
+                stream_notice = (
+                    ':tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv:\n'
+                    f'**STREAMED.** Please wait for {streamer.parse(mention=True)} to spectate!'
+                    '\n:tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv:\n\n')
+            effects += match_handler.prepare_match_ux(
+                m, l.game,
+                channel_name=l.queue_channel,
+                guild_id=l.guild.id,
+                stream_notice=stream_notice,
+                launch_message=launch_msg)
             l.called_matches.remove(m)
+    return effects
 
-async def status(caller, guild, channel):
-    user = user_handler.get_user(guild, caller)
+def status(user, guild, channel):
     msg = ''
     scope = channel
-    if (guild, scope) not in ladders:
+    if (guild, scope) not in state.ladders:
         options = get_ladders_in_guild(guild)
         if not options:
             msg += "No active ladders on this server.\n"
@@ -476,7 +488,7 @@ async def status(caller, guild, channel):
             msg += f"* {x}\n"
         return msg
     msg = ""
-    phase = ladders[(guild, scope)]
+    phase = state.ladders[(guild, scope)]
     if phase.completed():
         msg += f"Sorry, the ladder is closed.\n"
     else:
@@ -502,11 +514,10 @@ async def status(caller, guild, channel):
                     msg += f"Weird status: {ladder_status}"
     return msg
 
-async def history(caller, guild, channel):
-    user = user_handler.get_user(guild, caller)
+def history(user, guild, channel):
     msg = ''
     scope = channel
-    if (guild, scope) not in ladders:
+    if (guild, scope) not in state.ladders:
         options = get_ladders_in_guild(guild)
         if not options:
             msg += "No active ladders on this server.\n"
@@ -516,7 +527,7 @@ async def history(caller, guild, channel):
             msg += f"* {x}\n"
         return msg
     msg = ""
-    phase = ladders[(guild, scope)]
+    phase = state.ladders[(guild, scope)]
     if user not in phase.status_by_player and not phase.add_new_player(user):
         msg += f"Sorry, the ladder is closed.\n"
     else:
@@ -529,10 +540,10 @@ async def history(caller, guild, channel):
         msg += "\n"
     return msg
 
-def set_streamer(guild, channel, username):
+def set_streamer(guild, channel, user):
     msg = ''
     scope = channel
-    if (guild, scope) not in ladders:
+    if (guild, scope) not in state.ladders:
         options = get_ladders_in_guild(guild)
         if not options:
             msg += "No active ladders on this server.\n"
@@ -542,12 +553,11 @@ def set_streamer(guild, channel, username):
             msg += f"* {x}\n"
         return msg
     msg = ""
-    phase = ladders[(guild, scope)]
+    phase = state.ladders[(guild, scope)]
     if phase.completed():
         msg += f"Sorry, the ladder is closed.\n"
     else:
-        user = user_handler.get_user(guild, username)
-        streamers[phase] = user
+        state.streamers[phase] = user
         phase.streamed = True
         msg += f"Streamer set to {user} for {phase.name}.\n"
     return msg
@@ -555,7 +565,7 @@ def set_streamer(guild, channel, username):
 def nostream(guild, channel):
     msg = ''
     scope = channel
-    if (guild, scope) not in ladders:
+    if (guild, scope) not in state.ladders:
         options = get_ladders_in_guild(guild)
         if not options:
             msg += "No active ladders on this server.\n"
@@ -565,21 +575,19 @@ def nostream(guild, channel):
             msg += f"* {x}\n"
         return msg
     msg = ""
-    phase = ladders[(guild, scope)]
+    phase = state.ladders[(guild, scope)]
     if phase.completed():
         msg += f"Sorry, the ladder is closed.\n"
     else:
-        streamers[phase] = None
+        state.streamers[phase] = None
         phase.streamed = False
         msg += f"Streamer successfully removed.\n"
     return msg
 
-async def challenge(caller, guild, channel, opponent):
-    user = user_handler.get_user(guild, caller)
-    opp = user_handler.get_user(guild, opponent)
+def challenge(user, guild, channel, opp):
     msg = ''
     scope = channel
-    if (guild, scope) not in ladders:
+    if (guild, scope) not in state.ladders:
         options = get_ladders_in_guild(guild)
         if not options:
             msg += "No active ladders on this server.\n"
@@ -589,11 +597,11 @@ async def challenge(caller, guild, channel, opponent):
             msg += f"* {x}\n"
         return msg
     msg = ""
-    phase = ladders[(guild, scope)]
+    phase = state.ladders[(guild, scope)]
     if phase.completed():
         msg += f"Sorry, the ladder is closed.\n"
         return msg
-    if user == opponent:
+    if user == opp:
         msg += "You can't challenge yourself!\n"
         return msg
     if user not in phase.status_by_player and not phase.add_new_player(user):
@@ -607,8 +615,8 @@ async def challenge(caller, guild, channel, opponent):
         msg += "You two have played each other enough today."
         return msg
     if accepted:
-        await queue(caller, guild, channel)
-        await queue(opponent, guild, channel)
+        queue(user, guild, channel)
+        queue(opp, guild, channel)
         msg += f"{user} has accepted {opp}'s challenge!\nMatch on deck.\n"
         return msg
     else:
@@ -635,8 +643,5 @@ def load_from_ratings_db(ladder, p):
         return (ratings_row[3], ratings_row[4])
     return None
 
-async def push_ladder_updates():
-    for l in ladders.values():
-        await discord_handler.update_status_channel(l)
-        await discord_handler.update_leaderboard_channel(l)
-
+def push_ladder_updates():
+    return [UpdateLadderUI(ladder_id=id(l)) for l in ladders.values()]

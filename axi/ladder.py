@@ -11,7 +11,6 @@ from axi.ratings.glicko_timeless import GlickoTimeless
 from axi.ratings.danisen import Danisen
 import axi.handlers.ladder_handler as ladder_handler
 import axi.handlers.match_handler as match_handler
-import axi.handlers.discord_handler as discord_handler
 
 class Ladder:
     def __init__(self, guild, config, scheduled_event, streamed=False):

@@ -1,8 +1,8 @@
 from time import sleep, time
 from traceback import format_exc
-from copy import copy
 from json import load
 from datetime import datetime, timedelta, timezone
+from collections import defaultdict
 
 import discord.app_commands
 from pytimeparse.timeparse import timeparse
@@ -14,16 +14,26 @@ from discord.ext.commands import Bot
 from discord.app_commands.checks import has_permissions
 from discord.enums import ChannelType
 
-import axi.axi as axi
+import axi.registry as registry
 import axi.handlers.match_handler as match_handler
 import axi.handlers.user_handler as user_handler
 import axi.handlers.schedule_handler as schedule_handler
 import axi.handlers.ladder_handler as ladder_handler
 import axi.handlers.database_handler as database_handler
 from axi.abstract_cpu import AbstractCPU
-from axi.abstract_dm_game import AbstractDmGame
-from axi.thread_game import ThreadGame
 from axi.util import USER_STATUS_QUEUED
+from axi.effects import (
+    SendUserMessages, SendToThread, SendToChannel,
+    PresentDecision, CreateMatchThread, ArchiveThread,
+    UpdateLadderUI, ScheduleCallback,
+)
+
+# --- Discord-specific state (adapter layer) ---
+# These track the mapping between Discord objects and match objects.
+# Pure business logic never touches these; effects tell the adapter when to update them.
+decision_msgs_to_matches = dict()
+matches_to_decision_msgs = defaultdict(list)
+discord_threads_to_matches = dict()
 
 intents = Intents(
     bans=True,
@@ -97,6 +107,106 @@ async def send_long(channel, x, file=None, sleeptime=None):
     except:
         return await send_long(channel, format_exc())
 
+
+# --- Effect executor (adapter) ---
+
+async def execute_effects(effects):
+    for effect in effects:
+        if isinstance(effect, SendUserMessages):
+            user = bot.get_user(effect.user_id)
+            if not user:
+                continue
+            msgs = [m[0] for m in effect.messages]
+            files = [m[1] for m in effect.messages]
+            await send_long(user, msgs, file=files, sleeptime=0.8)
+
+        elif isinstance(effect, SendToThread):
+            match = match_handler.state.matches_by_id.get(effect.match_id)
+            if match and match.discord_thread:
+                msgs = [m[0] for m in effect.messages]
+                files = [m[1] for m in effect.messages]
+                await send_long(match.discord_thread, msgs, file=files, sleeptime=0.8)
+
+        elif isinstance(effect, SendToChannel):
+            guild = bot.get_guild(effect.guild_id)
+            channel = get(guild.channels, name=effect.channel_name)
+            msgs = [m[0] for m in effect.messages]
+            files = [m[1] for m in effect.messages]
+            await send_long(channel, msgs, file=files, sleeptime=0.8)
+
+        elif isinstance(effect, PresentDecision):
+            user = bot.get_user(effect.user_id)
+            if not user:
+                continue
+            msgs = [m[0] for m in effect.messages]
+            files = [m[1] for m in effect.messages]
+            discord_msg = await send_long(user, msgs, file=files, sleeptime=0.8)
+            match = match_handler.state.matches_by_id.get(effect.match_id)
+            if discord_msg and match:
+                decision_msgs_to_matches[discord_msg] = match
+                matches_to_decision_msgs[match].append(discord_msg)
+                for o in effect.options:
+                    await discord_msg.add_reaction(o)
+
+        elif isinstance(effect, CreateMatchThread):
+            guild = bot.get_guild(effect.guild_id)
+            channel = get(guild.channels, name=effect.channel_name)
+            match = match_handler.state.matches_by_id.get(effect.match_id)
+            launch_post = None
+            if effect.launch_message:
+                launch_post = await send_long(channel, effect.launch_message)
+            thread = await channel.create_thread(
+                name=effect.thread_name, type=ChannelType.public_thread,
+                message=launch_post)
+            if match:
+                match.discord_thread = thread
+                discord_threads_to_matches[thread] = match
+            if effect.init_messages:
+                msgs = [m[0] for m in effect.init_messages]
+                files = [m[1] for m in effect.init_messages]
+                await send_long(thread, msgs, file=files, sleeptime=0.8)
+            if effect.stream_notice:
+                await send_long(thread, effect.stream_notice, sleeptime=0.8)
+
+        elif isinstance(effect, ArchiveThread):
+            match = match_handler.state.matches_by_id.get(effect.match_id)
+            if match and match.discord_thread:
+                thread = match.discord_thread
+                await thread.edit(archived=True)
+                if thread in discord_threads_to_matches:
+                    del discord_threads_to_matches[thread]
+
+        elif isinstance(effect, UpdateLadderUI):
+            ladder = ladder_handler.state.ladders_by_id.get(effect.ladder_id)
+            if ladder:
+                await update_status_channel(ladder)
+                await update_leaderboard_channel(ladder)
+
+        elif isinstance(effect, ScheduleCallback):
+            name = effect.callback_name
+            args = dict(effect.callback_args)
+            delay = effect.delay_seconds
+            keys = effect.keys
+            suffix = effect.suffix
+            async def _cb(n=name, a=args):
+                await execute_callback(n, a)
+            await schedule_handler.schedule_event(
+                time() + delay, _cb, keys=keys, suffix=suffix)
+
+
+async def execute_callback(callback_name, callback_args):
+    effects = []
+    if callback_name == "resolve_checkins":
+        match = match_handler.state.matches_by_id.get(callback_args.get("match_id"))
+        if match:
+            effects = match_handler.resolve_checkins(match)
+    elif callback_name == "update_ladders_no_echo":
+        effects = ladder_handler.update_ladders(echo=False)
+    await execute_effects(effects)
+
+
+# --- Slash commands ---
+
 @bot.command(name="sync")
 @has_permissions(ban_members=True)
 async def sync(ctx, scope: str = "guild"):
@@ -153,12 +263,12 @@ async def help(ctx):
 @bot.tree.command(name="games", description="Use /games to view the game list.")
 async def games(ctx):
     msg = "List of DM games:\n"
-    for g in axi.dm_games:
+    for g in registry.dm_games:
         msg += "* "
         msg += g
         msg += "\n"
     msg += "\nList of thread games:\n"
-    for g in axi.thread_games:
+    for g in registry.thread_games:
         msg += "* "
         msg += g
         msg += "\n"
@@ -167,68 +277,36 @@ async def games(ctx):
 
 @bot.tree.command(name="versus", description="Use /solo or /versus to play.")
 async def versus(ctx, game: str, opponent: str):
-    if game not in axi.dm_games and game not in axi.thread_games:
+    if game not in registry.dm_games and game not in registry.thread_games:
         await ctx.response.send_message("Invalid game. Use /games to see the game list.\n")
         return
     player1 = user_handler.get_user(ctx.guild, ctx.user)
-    if (game in axi.dm_games and player1 in match_handler.users_to_dm_matches) or (
-        game in axi.thread_games and player1 in match_handler.users_to_thread_matches):
+    if (game in registry.dm_games and player1 in match_handler.state.users_to_dm_matches) or (
+        game in registry.thread_games and player1 in match_handler.state.users_to_thread_matches):
         await ctx.response.send_message(f"{player1} is already in a match!\n")
         return
     player2 = user_handler.get_user(ctx.guild, opponent)
     if not player2:
         await ctx.response.send_message("Invalid player ping.\n")
         return
-    if (game in axi.dm_games and player2 in match_handler.users_to_dm_matches) or (
-        game in axi.thread_games and player2 in match_handler.users_to_thread_matches):
+    if (game in registry.dm_games and player2 in match_handler.state.users_to_dm_matches) or (
+        game in registry.thread_games and player2 in match_handler.state.users_to_thread_matches):
         await ctx.response.send_message(f"{player2} is already in a match!\n")
         return
     match = match_handler.launch_match(game, [player1, player2])
-    await create_versus_match_ux(match, game, ctx.channel, ctx=ctx)
-
-async def create_versus_match_ux(match, game, channel, ctx=None):
-    launch_msg = f"Launching {game.upper()}: {match.players[0]} vs. {match.players[1]}.\n"
-    call_post = await ctx.response.send_message(launch_msg) if ctx else await send_long(channel, launch_msg, sleeptime=0.8)
-    if game in axi.dm_games:
-        for p in match.players:
-            discord_message = None
-            messages = match.flush_message_queue(p)
-            if len(messages) > 0 and not isinstance(p, AbstractCPU):
-                msgs = [m[0] for m in messages]
-                files = [m[1] for m in messages]
-                discord_message = await send_long(p, msgs, file=files, sleeptime=0.8)
-            if match.expected_num_decisions[p] > 0:
-                if isinstance(p, AbstractCPU):
-                    decision = p.compute(copy(match.get_options(p)))
-                    await match_handler.process_decision(p, decision)
-                else:
-                    match_handler.decision_msgs_to_matches[discord_message] = match
-                    match_handler.matches_to_decision_msgs[match].append(discord_message)
-                    for o in match.get_options(p):
-                        await discord_message.add_reaction(o)
-    else:
-        thread_name = f"{match.players[0]} vs. {match.players[1]}"
-        match.discord_thread = await channel.create_thread(
-            name=thread_name, type=ChannelType.public_thread, message=call_post)
-        match_handler.discord_threads_to_matches[match.discord_thread] = match
-        messages = match.match_init_msg()
-        if len(messages) > 0:
-            msgs = [m[0] for m in messages]
-            files = [m[1] for m in messages]
-            await send_long(match.discord_thread, msgs, file=files, sleeptime=0.8)
-        if match.streamed and match.ladder and ladder_handler.streamers[match.ladder]:
-            msg = ''
-            msg += ':tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv:\n'
-            msg += f'**STREAMED.** '
-            msg += f'Please wait for {ladder_handler.streamers[match.ladder].parse(mention=True)} to spectate!'
-            msg += '\n:tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv:\n'
-            msg += '\n'
-            await send_long(match.discord_thread, msg, file='', sleeptime=0.8)
+    if not match:
+        await ctx.response.send_message("Failed to launch match.\n")
+        return
+    effects = match_handler.prepare_match_ux(match, game,
+        channel_name=ctx.channel.name, guild_id=ctx.guild.id)
+    await ctx.response.send_message(
+        f"Launching {game.upper()}: {match.players[0]} vs. {match.players[1]}.\n")
+    await execute_effects(effects)
 
 @bot.tree.command(name="solo", description="Use /solo or /versus to play.")
 async def solo(ctx, game: str, mode: str):
-    if game not in axi.dm_games:
-        if game in axi.thread_games:
+    if game not in registry.dm_games:
+        if game in registry.thread_games:
             await ctx.response.send_message(f"Thread games can only be played in versus mode. Try /versus.\n")
             return
         await ctx.response.send_message(f"Invalid game. Use /games to see the game list.\n")
@@ -237,30 +315,16 @@ async def solo(ctx, game: str, mode: str):
         await ctx.response.send_message(f"Use /versus instead.\n")
         return
     player = user_handler.get_user(ctx.guild, ctx.user)
-    if player in match_handler.users_to_dm_matches:
+    if player in match_handler.state.users_to_dm_matches:
         await ctx.response.send_message(f"{player} is already in a match!\n")
         return
     match = match_handler.launch_match(game, [player], mode=mode)
     if not match:
         await ctx.response.send_message("Invalid mode.\n")
         return
+    effects = match_handler.prepare_match_ux(match, game)
     await ctx.response.send_message(f"Launching...")
-    discord_message = None
-    messages = match.flush_message_queue(player)
-    if len(messages) > 0 and not isinstance(player, AbstractCPU):
-        msgs = [m[0] for m in messages]
-        files = [m[1] for m in messages]
-        discord_message = await send_long(player, msgs, file=files, sleeptime=0.8)
-    for p in match.players:
-        if match.expected_num_decisions[p] > 0:
-            if isinstance(p, AbstractCPU):
-                decision = p.compute(copy(match.get_options(p)))
-                await match_handler.process_decision(p, decision)
-            else:
-                match_handler.decision_msgs_to_matches[discord_message] = match
-                match_handler.matches_to_decision_msgs[match].append(discord_message)
-                for o in match.get_options(p):
-                    await discord_message.add_reaction(o)
+    await execute_effects(effects)
 
 @bot.tree.command(name="spectate", description="Use /spectate to watch someone else\'s gameplay.")
 async def spectate(ctx, player: str):
@@ -269,8 +333,8 @@ async def spectate(ctx, player: str):
     if not player:
         await ctx.response.send_message("Invalid player ping.\n")
         return
-    if player in match_handler.users_to_dm_matches:
-        match = match_handler.users_to_dm_matches[player]
+    if player in match_handler.state.users_to_dm_matches:
+        match = match_handler.state.users_to_dm_matches[player]
     else:
         await ctx.response.send_message("No match to spectate.\n")
         return
@@ -290,35 +354,39 @@ async def spectate(ctx, player: str):
 async def abort(ctx):
     user = user_handler.get_user(ctx.guild, ctx.user)
     if not ctx.guild:
-        if not user in match_handler.users_to_dm_matches:
+        if not user in match_handler.state.users_to_dm_matches:
             await ctx.response.send_message(f"You are not in a match.")
             return
-        match = match_handler.users_to_dm_matches[user]
+        match = match_handler.state.users_to_dm_matches[user]
         if user in match.players:
-            await match_handler.process_decision(user, "abort")
+            effects = match_handler.process_decision(user, "abort")
             await ctx.response.send_message(f"{user} has aborted the game.")
+            await execute_effects(effects)
         elif user in match.spectators:
             match.spectators.remove(user)
             for p in match.agents():
-                await p.uid.send(f"{user} has stopped spectating.")
+                discord_user = bot.get_user(p.uid.id)
+                if discord_user:
+                    await discord_user.send(f"{user} has stopped spectating.")
     else:
-        if not user in match_handler.users_to_thread_matches:
+        if not user in match_handler.state.users_to_thread_matches:
             await ctx.response.send_message(f"You are not in a match.")
             return
-        match = match_handler.users_to_thread_matches[user]
+        match = match_handler.state.users_to_thread_matches[user]
         match.report_abort(user)
         if match.check_match_over():
+            effects = match_handler.cancel_match(match)
             await ctx.response.send_message(f"Match aborted. You may close this thread.")
-            await match_handler.cancel_match(match)
+            await execute_effects(effects)
         else:
             await ctx.response.send_message(f"Abort requested. Both players must confirm.")
 
 @bot.tree.command(name="win", description="Use /win to report that you won the match. Both players must confirm.")
 async def win(ctx):
-    if ctx.channel not in match_handler.discord_threads_to_matches:
+    if ctx.channel not in discord_threads_to_matches:
         await ctx.response.send_message(f"Use this command in your thread to report that you won your match!")
         return
-    match = match_handler.discord_threads_to_matches[ctx.channel]
+    match = discord_threads_to_matches[ctx.channel]
     if not match:
         await ctx.response.send_message(f"Use this command in your thread to report that you won your match!")
         return
@@ -330,17 +398,18 @@ async def win(ctx):
         await ctx.response.send_message(f"This set has already been reported (winner: {match.winner()}).")
     match.report_winner(user, user)
     if match.check_match_over():
+        effects = match_handler.close_match(match)
         await ctx.response.send_message(f"Score reported. You may close this thread.")
-        await match_handler.close_match(match)
+        await execute_effects(effects)
     else:
         await ctx.response.send_message(f"Score reported. Both players must confirm.")
 
 @bot.tree.command(name="lose", description="Use /lose to report that you won the match. Both players must confirm.")
 async def lose(ctx):
-    if ctx.channel not in match_handler.discord_threads_to_matches:
+    if ctx.channel not in discord_threads_to_matches:
         await ctx.response.send_message(f"Use this command in your thread to report that you won your match!")
         return
-    match = match_handler.discord_threads_to_matches[ctx.channel]
+    match = discord_threads_to_matches[ctx.channel]
     if not match:
         await ctx.response.send_message(f"Use this command in your thread to report that you won your match!")
         return
@@ -352,18 +421,19 @@ async def lose(ctx):
         await ctx.response.send_message(f"This set has already been reported (winner: {match.winner()}).")
     match.report_winner(user, match.opponent(user))
     if match.check_match_over():
+        effects = match_handler.close_match(match)
         await ctx.response.send_message(f"Score reported. You may close this thread.")
-        await match_handler.close_match(match)
+        await execute_effects(effects)
     else:
         await ctx.response.send_message(f"Score reported. Both players must confirm.")
 
 @bot.tree.command(name="report", description="Use /report to report the winner of a match")
 @has_permissions(ban_members=True)
 async def report(ctx, winner: str):
-    if ctx.channel not in match_handler.discord_threads_to_matches:
+    if ctx.channel not in discord_threads_to_matches:
         await ctx.response.send_message(f"Use this command in a thread to report the winner!")
         return
-    match = match_handler.discord_threads_to_matches[ctx.channel]
+    match = discord_threads_to_matches[ctx.channel]
     if not match:
         await ctx.response.send_message(f"Use this command in a thread to report the winner!")
         return
@@ -371,8 +441,9 @@ async def report(ctx, winner: str):
         await ctx.response.send_message(f"This set has already been reported (winner: {match.winner()}).")
     match.report_winner(ctx.user, user_handler.get_user(ctx.guild, winner), admin_override=True)
     if match.check_match_over():
+        effects = match_handler.close_match(match)
         await ctx.response.send_message(f"Score reported. You may close this thread.")
-        await match_handler.close_match(match)
+        await execute_effects(effects)
     else:
         await ctx.response.send_message(f"Score reported. Both players must confirm.")
 
@@ -411,34 +482,41 @@ async def ladder(ctx, config_file: str):
     await send_long(leaderboard_channel, "", file="axi/assets/discord_header_begin.png")
     await ctx.response.send_message("Ladder is open!\n")
     ladder_handler.start_ladder(ctx.guild, config, scheduled_event)
-    await ladder_handler.update_ladders()
+    effects = ladder_handler.update_ladders()
+    await execute_effects(effects)
 
 @bot.tree.command(name="queue", description="Use /queue to queue up for a ladder.")
 async def queue(ctx):
-    msg = await ladder_handler.queue(ctx.user, ctx.guild, ctx.channel.name)
+    user = user_handler.get_user(ctx.guild, ctx.user)
+    msg = ladder_handler.queue(user, ctx.guild, ctx.channel.name)
+    effects = ladder_handler.update_ladders()
     await ctx.response.send_message(msg)
-    await ladder_handler.update_ladders()
+    await execute_effects(effects)
 
 @bot.tree.command(name="dequeue", description="Use /dequeue to dequeue from a ladder.")
 async def dequeue(ctx):
-    msg = await ladder_handler.dequeue(ctx.user, ctx.guild, ctx.channel.name)
+    user = user_handler.get_user(ctx.guild, ctx.user)
+    msg = ladder_handler.dequeue(user, ctx.guild, ctx.channel.name)
+    effects = ladder_handler.update_ladders()
     await ctx.response.send_message(msg)
-    await ladder_handler.update_ladders()
+    await execute_effects(effects)
 
 @bot.tree.command(name="autoqueue", description="Use /autoqueue on or /autoqueue off to automatically re-queue after each match.\n")
 async def autoqueue(ctx, mode: str):
-    msg = await ladder_handler.autoqueue(ctx.user, ctx.guild, ctx.channel.name, mode)
+    user = user_handler.get_user(ctx.guild, ctx.user)
+    msg = ladder_handler.autoqueue(user, ctx.guild, ctx.channel.name, mode)
+    effects = ladder_handler.update_ladders()
     await ctx.response.send_message(msg)
-    await ladder_handler.update_ladders()
+    await execute_effects(effects)
 
 @bot.tree.command(name="cancel", description="Use /cancel to cancel a match.")
 @discord.app_commands.default_permissions(ban_members=True)
 @has_permissions(ban_members=True)
 async def cancel(ctx):
-    if ctx.channel not in match_handler.discord_threads_to_matches:
+    if ctx.channel not in discord_threads_to_matches:
         await ctx.response.send_message(f"Use this command in a thread to cancel the match!")
         return
-    match = match_handler.discord_threads_to_matches[ctx.channel]
+    match = discord_threads_to_matches[ctx.channel]
     if not match:
         await ctx.response.send_message(f"Use this command in a thread to cancel the match!")
         return
@@ -446,17 +524,18 @@ async def cancel(ctx):
         await ctx.response.send_message(f"This set has already been reported (winner: {match.winner()}).")
     match.report_abort("admin")
     if match.check_match_over():
+        effects = match_handler.cancel_match(match)
         await ctx.response.send_message(f"Match aborted. You may close this thread.")
-        await match_handler.cancel_match(match)
+        await execute_effects(effects)
     else:
         await ctx.response.send_message(f"Abort requested. Both players must confirm.")
 
 @bot.tree.command(name="doubleblind", description="Use /doubleblind to perform double-blind character selection")
 async def doubleblind(ctx):
-    if ctx.channel not in match_handler.discord_threads_to_matches:
+    if ctx.channel not in discord_threads_to_matches:
         await ctx.response.send_message(f"Use this command in your thread to select characters double-blind with your opponent!")
         return
-    match = match_handler.discord_threads_to_matches[ctx.channel]
+    match = discord_threads_to_matches[ctx.channel]
     if not match:
         await ctx.response.send_message(f"Use this command in your thread to select characters double-blind with your opponent!")
         return
@@ -466,8 +545,10 @@ async def doubleblind(ctx):
         return
     if match.check_match_over():
         await ctx.response.send_message(f"This set has already been reported (winner: {match.winner()}).")
-    match = match_handler.launch_match("doubleblind", [user, match.opponent(user)])
-    await create_versus_match_ux(match, "doubleblind", ctx.channel, ctx=ctx)
+    db_match = match_handler.launch_match("doubleblind", [user, match.opponent(user)])
+    effects = match_handler.prepare_match_ux(db_match, "doubleblind")
+    await ctx.response.send_message("Starting double-blind selection...")
+    await execute_effects(effects)
 
 @bot.tree.command(name="lag", description="Use /lag to see lag test instructions.")
 async def lag(ctx):
@@ -484,25 +565,31 @@ async def lag(ctx):
 
 @bot.tree.command(name="challenge", description="Use /challenge to directly challenge someone to a ranked match.")
 async def challenge(ctx, opponent: str):
-    msg = await ladder_handler.challenge(ctx.user, ctx.guild, ctx.channel.name, opponent)
+    user = user_handler.get_user(ctx.guild, ctx.user)
+    opp = user_handler.get_user(ctx.guild, opponent)
+    msg = ladder_handler.challenge(user, ctx.guild, ctx.channel.name, opp)
+    effects = ladder_handler.update_ladders()
     await ctx.response.send_message(msg)
-    await ladder_handler.update_ladders()
+    await execute_effects(effects)
 
 @bot.tree.command(name="status", description="Use /status to check your status in the ladder.")
 async def status(ctx):
-    msg = await ladder_handler.status(ctx.user, ctx.guild, ctx.channel.name)
+    user = user_handler.get_user(ctx.guild, ctx.user)
+    msg = ladder_handler.status(user, ctx.guild, ctx.channel.name)
     await ctx.response.send_message(msg)
 
 @bot.tree.command(name="history", description="Use /history to check your match history this session.")
 async def history(ctx):
-    msg = await ladder_handler.history(ctx.user, ctx.guild, ctx.channel.name)
+    user = user_handler.get_user(ctx.guild, ctx.user)
+    msg = ladder_handler.history(user, ctx.guild, ctx.channel.name)
     await ctx.response.send_message(msg)
 
 @bot.tree.command(name="setstreamer", description="Use /setstreamer to select a streamer for the ladder.")
 @discord.app_commands.default_permissions(ban_members=True)
 @has_permissions(ban_members=True)
 async def setstreamer(ctx, streamer: str):
-    msg = ladder_handler.set_streamer(ctx.guild, ctx.channel.name, streamer)
+    user = user_handler.get_user(ctx.guild, streamer)
+    msg = ladder_handler.set_streamer(ctx.guild, ctx.channel.name, user)
     await ctx.response.send_message(msg)
 
 @bot.tree.command(name="nostream", description="Use /nostream to remove the streamer.")
@@ -534,23 +621,28 @@ async def displayname(ctx, name: str):
     except Exception as error:
         print("Couldn't edit display name.")
         print(error)
-    await ladder_handler.push_ladder_updates()
+    effects = ladder_handler.push_ladder_updates()
+    await execute_effects(effects)
+
+
+# --- Event handlers ---
 
 @bot.event
 async def on_message(message):
     if message == "/sync":
         await sync()
     await bot.process_commands(message)
-    if message.channel in match_handler.discord_threads_to_matches:
-        match = match_handler.discord_threads_to_matches[message.channel]
+    if message.channel in discord_threads_to_matches:
+        match = discord_threads_to_matches[message.channel]
         user = user_handler.get_user(message.guild, message.author)
         if user in match.players:
             if match.checkin_user(user):
                 await send_long(message.channel, f"{user} has checked in!\n")
     if not message.guild:
         user = user_handler.get_user(message.guild, message.author)
-        if user in match_handler.users_to_dm_matches and user in match_handler.users_to_dm_matches[user].players:
-            await match_handler.process_command(user, message.content)
+        if user in match_handler.state.users_to_dm_matches and user in match_handler.state.users_to_dm_matches[user].players:
+            effects = match_handler.process_command(user, message.content)
+            await execute_effects(effects)
 
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -558,10 +650,14 @@ async def on_reaction_add(reaction, user):
         message = reaction.message
         user = user_handler.get_user(message.guild, user)
         emoji = reaction.emoji
-        if message in match_handler.decision_msgs_to_matches:
-            await match_handler.process_decision(user, emoji)
+        if message in decision_msgs_to_matches:
+            effects = match_handler.process_decision(user, emoji)
+            await execute_effects(effects)
     except:
         print(format_exc())
+
+
+# --- Ladder UI rendering (adapter-side, purely Discord presentation) ---
 
 async def update_status_channel(l):
     active_matches = l.get_active_matches()
