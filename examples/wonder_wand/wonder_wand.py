@@ -5,6 +5,7 @@ from axi.abstract_dm_game import AbstractDmGame
 from axi.abstract_mode_selector import AbstractModeSelector
 from axi.abstract_cpu import AbstractCPU
 from axi.simple_cpu import SimpleCPU
+from axi.claude_cpu import ClaudeCPU
 from axi.axi import load_profile, save_profile
 
 
@@ -355,11 +356,15 @@ PHASE_EOT = 2
 class WonderWandVersus(AbstractDmGame):
 
     def validate_mode(self):
-        return self.mode in ["versus", "cpu"]
+        return self.mode in ["versus", "cpu", "claude"]
 
     def initialize_match_state(self):
         if self.mode == "cpu":
             cpu = SimpleCPU(self)
+            self.players.append(cpu)
+            self.expected_num_decisions[cpu] = 1
+        elif self.mode == "claude":
+            cpu = ClaudeCPU(self)
             self.players.append(cpu)
             self.expected_num_decisions[cpu] = 1
         self.initial_hp = 40
@@ -1271,10 +1276,10 @@ class WonderWandVersus(AbstractDmGame):
 
 class WonderWand(AbstractModeSelector):
     def validate_mode(self):
-        return self.mode in ["versus", "cpu", "customize"]
+        return self.mode in ["versus", "cpu", "claude", "customize"]
 
     def initialize_match_state(self):
-        if self.mode == "versus" or self.mode == "cpu":
+        if self.mode in ["versus", "cpu", "claude"]:
             self.true_game = WonderWandVersus(self.players, mode=self.mode)
         elif self.mode == "customize":
             self.true_game = customize_wand.CustomizeWand(self.players, mode=self.mode)

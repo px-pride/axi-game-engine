@@ -1,0 +1,28 @@
+[project]
+name = "axi-game-engine"
+version = "0.1.0"
+description = "Discord bot game engine for competitive ladder play"
+requires-python = ">=3.10"
+dependencies = [
+    "discord.py>=2.0",
+    "python-dotenv",
+    "numpy",
+    "openskill>=2.4,<3",
+    "pytimeparse",
+]
+
+[project.optional-dependencies]
+claude = [
+    "claude-agent-sdk",
+]
+
+[project.scripts]
+axi = "example_main:run"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
