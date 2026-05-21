@@ -15,11 +15,15 @@ class MatchState:
         self.users_to_dm_matches = dict()
         self.users_to_thread_matches = dict()
         self.matches_by_id = dict()
+        # match_id -> Callable[[match, winner, score], list[Effect]]
+        # Optional per-match completion callback (e.g. tournament integration).
+        self.completion_callbacks = dict()
 
 state = MatchState()
 
 
-def launch_match(name, players, mode="versus", ladder=None, best_of=1, checkin_timer=None, label="UNRANKED"):
+def launch_match(name, players, mode="versus", ladder=None, best_of=1, checkin_timer=None, label="UNRANKED",
+                 completion_callback=None):
     match = None
     if name in registry.dm_games:
         candidate = registry.dm_games[name](
@@ -39,6 +43,8 @@ def launch_match(name, players, mode="versus", ladder=None, best_of=1, checkin_t
             state.users_to_thread_matches[p] = match
     if match:
         state.matches_by_id[id(match)] = match
+        if completion_callback is not None:
+            state.completion_callbacks[id(match)] = completion_callback
     return match
 
 
@@ -163,6 +169,16 @@ def close_match(match):
     if match.ladder:
         match.ladder.advance(match)
         effects.append(UpdateLadderUI(ladder_id=id(match.ladder)))
+    callback = state.completion_callbacks.pop(id(match), None)
+    if callback is not None:
+        try:
+            winner = match.winner() if hasattr(match, "winner") else None
+            score = getattr(match, "score", None)
+            callback_effects = callback(match, winner, score)
+            if callback_effects:
+                effects += callback_effects
+        except Exception:
+            pass
     return effects
 
 

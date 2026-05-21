@@ -66,3 +66,49 @@ class ScheduleCallback:
     callback_args: dict = field(default_factory=dict)
     keys: list = None     # deduplication keys for schedule_handler
     suffix: str = None    # deduplication suffix for schedule_handler
+
+
+@dataclass
+class LaunchTournamentMatch:
+    """Tournament asks the adapter to launch a match for a bracket node.
+
+    The adapter calls match_handler.launch_match(...,
+    completion_callback=on_match_complete) and records the resulting Match
+    in tournament_state.state.nodes_to_matches[node_id]."""
+    node_id: str
+    tournament_id: str
+    graph_id: str
+    players: list             # list[user_id: int]
+    game: str
+    mode: str
+    best_of: int
+    label: str
+    stream: bool
+
+
+@dataclass
+class AnnounceBracket:
+    """Emit a bracket announcement (text + optional image) to a channel.
+    Adapter decides formatting (text-only vs Graphviz PNG)."""
+    guild_id: int
+    channel_name: str
+    text: str
+    image_path: str = None
+
+
+@dataclass
+class CallMatchForStream:
+    """Designate a specific bracket match as the next streamed match."""
+    node_id: str
+
+
+@dataclass
+class ArchiveTournamentMatch:
+    """Tournament asks the adapter to archive the match's thread/DM artifacts."""
+    node_id: str
+
+
+@dataclass
+class UpdateTournamentUI:
+    """Refresh the tournament's status / placements display."""
+    tournament_id: str
