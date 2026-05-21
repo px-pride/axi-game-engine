@@ -71,8 +71,20 @@ class SingleElimination(MatchGraph):
     def __repr__(self):
         return "SINGLE ELIMINATION"
 
-    def generate_bracket(self):
-        """Build the bracket DAG. Returns initial round matches to call."""
+    def generate_bracket(self, stream_threshold=None, bo5_threshold=None,
+                         link_victory=True):
+        """Build the bracket DAG. Returns initial round matches to call.
+
+        Optional kwargs (Phase 3 hook):
+            stream_threshold : override self.stream_threshold for this build.
+            bo5_threshold    : override self.bo5_threshold for this build.
+            link_victory     : if False, don't link final match to victory_node.
+                               DoubleElimination uses this to wire its own
+                               GRAND/DEADASS chain through victory_node instead.
+        """
+        stream_thresh = self.stream_threshold if stream_threshold is None else stream_threshold
+        bo5_thresh = self.bo5_threshold if bo5_threshold is None else bo5_threshold
+
         temp_players = self.num_players
         layer = {}
         wr = 1
@@ -84,12 +96,12 @@ class SingleElimination(MatchGraph):
             j = temp_players - 1 - i
             node = self.add_node(
                 players=[self.players[i], self.players[j]],
-                best_of=self._choose_best_of(temp_players),
+                best_of=self._choose_best_of(temp_players, bo5_thresh),
                 loser_gets=temp_players,
                 label=self._label_for(temp_players, wr),
                 game=self._game_name(),
             )
-            self._maybe_mark_streamed(node, temp_players, i)
+            self._maybe_mark_streamed(node, temp_players, i, stream_thresh)
             matches_to_call.append(node)
             round_matches.append(node)
             layer[i] = node
@@ -104,12 +116,12 @@ class SingleElimination(MatchGraph):
             for i in range(temp_players // 2):
                 j = temp_players - 1 - i
                 node = self.add_node(
-                    best_of=self._choose_best_of(temp_players),
+                    best_of=self._choose_best_of(temp_players, bo5_thresh),
                     loser_gets=temp_players,
                     label=self._label_for(temp_players, wr),
                     game=self._game_name(),
                 )
-                self._maybe_mark_streamed(node, temp_players, i)
+                self._maybe_mark_streamed(node, temp_players, i, stream_thresh)
                 self.link_parent(node, layer[i], "W")
                 self.link_parent(node, layer[j], "W")
                 last_match = node
@@ -123,17 +135,20 @@ class SingleElimination(MatchGraph):
             temp_players //= 2
             wr += 1
 
-        # Link the final match to the victory_node.
-        if last_match is not None:
-            self.link_parent(self.victory_node, last_match, "W")
-        elif matches_to_call:
-            # 2-player bracket: the round-1 match IS the final.
-            self.link_parent(self.victory_node, matches_to_call[0], "W")
+        # Link the final match to the victory_node (unless caller opts out).
+        if link_victory:
+            if last_match is not None:
+                self.link_parent(self.victory_node, last_match, "W")
+            elif matches_to_call:
+                # 2-player bracket: the round-1 match IS the final.
+                self.link_parent(self.victory_node, matches_to_call[0], "W")
 
         return matches_to_call
 
-    def _choose_best_of(self, temp_players):
-        if self.bo5_threshold > 0 and temp_players <= self.bo5_threshold:
+    def _choose_best_of(self, temp_players, bo5_thresh=None):
+        if bo5_thresh is None:
+            bo5_thresh = self.bo5_threshold
+        if bo5_thresh > 0 and temp_players <= bo5_thresh:
             return 5
         return 3
 
@@ -146,11 +161,13 @@ class SingleElimination(MatchGraph):
             return "WINNERS QUARTERS"
         return f"WINNERS ROUND {wr}"
 
-    def _maybe_mark_streamed(self, node, temp_players, i):
-        if self.stream_threshold <= 0:
+    def _maybe_mark_streamed(self, node, temp_players, i, stream_thresh=None):
+        if stream_thresh is None:
+            stream_thresh = self.stream_threshold
+        if stream_thresh <= 0:
             return
         is_last_of_round = (i == temp_players // 2 - 1)
-        if temp_players <= self.stream_threshold or is_last_of_round:
+        if temp_players <= stream_thresh or is_last_of_round:
             node.streamed = True
             self.stream_candidates.append(node)
 
