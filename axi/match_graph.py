@@ -98,13 +98,16 @@ class MatchGraph(ABC):
         return node
 
     def link_parent(self, child, parent, flag):
-        """Link `parent` -> `child` with W/L flag.
+        """Link `parent` -> `child` with W/L/S flag.
 
         flag == "W" means child receives the parent's winner.
         flag == "L" means child receives the parent's loser.
+        flag == "S" means sequence-only (no player propagation); used for
+        round-to-round ordering in formats like RoundRobin where the child
+        already has fixed players.
         """
-        if flag not in ("W", "L"):
-            raise ValueError(f"flag must be 'W' or 'L', got {flag!r}")
+        if flag not in ("W", "L", "S"):
+            raise ValueError(f"flag must be 'W', 'L', or 'S', got {flag!r}")
         child.parents[parent.node_id] = flag
         parent.children[child.node_id] = flag
 
@@ -232,9 +235,10 @@ class MatchGraph(ABC):
             child = self.nodes_by_id.get(child_id)
             if child is None:
                 continue
-            incoming = winner if flag == "W" else loser
-            if incoming is not None and incoming not in child.players:
-                child.players.append(incoming)
+            if flag != "S":
+                incoming = winner if flag == "W" else loser
+                if incoming is not None and incoming not in child.players:
+                    child.players.append(incoming)
             if child is self.victory_node:
                 # Victory sentinel: mark completed once a winner reaches it.
                 if winner is not None:
@@ -283,9 +287,10 @@ class MatchGraph(ABC):
             child = self.nodes_by_id.get(child_id)
             if child is None:
                 continue
-            incoming = winner if flag == "W" else loser
-            if incoming is not None and incoming not in child.players:
-                child.players.append(incoming)
+            if flag != "S":
+                incoming = winner if flag == "W" else loser
+                if incoming is not None and incoming not in child.players:
+                    child.players.append(incoming)
             if self._child_ready(child):
                 effects += self.call_match(child)
         return effects
@@ -341,9 +346,10 @@ class MatchGraph(ABC):
             winner = node.winner()
             loser = node.loser()
             flag = node.children[child_id]
-            incoming = winner if flag == "W" else loser
-            if incoming is not None and incoming in child.players:
-                child.players.remove(incoming)
+            if flag != "S":
+                incoming = winner if flag == "W" else loser
+                if incoming is not None and incoming in child.players:
+                    child.players.remove(incoming)
             if not child.asleep():
                 child.status = MATCH_STATUS_ASLEEP
                 child.checkins.clear()

@@ -206,3 +206,15 @@ class Tournament:
     def save_checkpoint(self):
         """Stub for Phase 10 — DB-backed checkpoint persistence lives there."""
         return None
+
+    def reduce_double_jeopardy(self, players):
+        """For RR → DE seeding: prevent rematches by swapping pairs in the
+        bottom 1/3 of the seed list. Used by composite presets (Phase 4).
+
+        Mutates and returns `players` (so call sites can chain).
+        """
+        n = len(players)
+        cutoff = (2 * n) // 3
+        for i in range(cutoff, n - 1, 2):
+            players[i], players[i + 1] = players[i + 1], players[i]
+        return players

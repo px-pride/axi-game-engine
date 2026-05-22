@@ -42,6 +42,8 @@ class MatchNode:
     node_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     parents: dict = field(default_factory=dict)
     children: dict = field(default_factory=dict)
+    # Phase 4: optional pool tag for RoundRobin pool tournaments.
+    pool_id: int = None
 
     def asleep(self):
         return self.status == MATCH_STATUS_ASLEEP
