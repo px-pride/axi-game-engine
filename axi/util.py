@@ -9,7 +9,6 @@ MATCH_STATUS_COMPLETED = 3
 USER_STATUS_QUEUED = 0
 USER_STATUS_CALLED = 1
 USER_STATUS_BREAK = 2
-USER_STATUS_ELIMINATED = 3
 
 supported_ladder_formats = [
     "friendlies",

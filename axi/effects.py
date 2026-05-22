@@ -112,13 +112,3 @@ class ArchiveTournamentMatch:
 class UpdateTournamentUI:
     """Refresh the tournament's status / placements display."""
     tournament_id: str
-
-
-@dataclass
-class UpdateLavaUI:
-    """Refresh the lava-level display for a LadderElimination phase."""
-    tournament_id: str
-    graph_id: str
-    lava_level: float
-    placement_snapshot: int
-    players_in_danger: list   # [user_id: int]
