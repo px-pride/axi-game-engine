@@ -43,39 +43,66 @@ from axi.ratings.danisen import Danisen
 class Ladder(MatchGraph):
     """Friendlies session as a MatchGraph subclass."""
 
-    def __init__(self, guild, config, scheduled_event, streamed=False,
-                 time_fn=None, duration_seconds=None):
+    def __init__(self, guild=None, config=None, scheduled_event=None,
+                 streamed=False, time_fn=None, duration_seconds=None,
+                 *, tournament=None, players=None,
+                 name=None, game=None, fmt=None,
+                 queue_channel=None, status_channel=None,
+                 results_channel=None, leaderboard_channel=None):
+        """Two construction paths:
+          - Discord-session: `Ladder(guild, config, scheduled_event, ...)`
+            (config dict with name/game/format/duration/channel fields).
+          - Tournament-format: pass `tournament=` + `players=` + explicit
+            field kwargs (no guild/config). Used by LadderElimination and
+            other tournament-format subclasses.
+        """
         self.rowid = None
         self.guild = guild
         self.config = config
-        self.name = config["name"]
-        self.game = config["game"]
-        self.fmt = config["format"]
-        self.queue_channel = config["queue-channel"]
-        self.status_channel = config["status-channel"]
-        self.results_channel = config["results-channel"]
-        self.leaderboard_channel = config["leaderboard-channel"]
-        # Allow tests to bypass pytimeparse (which conftest mocks).
-        if duration_seconds is not None:
-            self.duration = duration_seconds
-        else:
-            self.duration = timeparse(config["duration"])
         self.scheduled_event = scheduled_event
         self.streamed = streamed
         self.status_message = None
         self.leaderboard_message = None
         self._time_fn = time_fn or _time_module.time
 
+        if config is not None:
+            # Discord-session path.
+            self.name = config["name"]
+            self.game = config["game"]
+            self.fmt = config["format"]
+            self.queue_channel = config["queue-channel"]
+            self.status_channel = config["status-channel"]
+            self.results_channel = config["results-channel"]
+            self.leaderboard_channel = config["leaderboard-channel"]
+            if duration_seconds is not None:
+                self.duration = duration_seconds
+            else:
+                self.duration = timeparse(config["duration"])
+        else:
+            # Tournament-format path.
+            self.name = name or "ladder"
+            self.game = game or getattr(tournament, "game", "rps") if tournament else "rps"
+            self.fmt = fmt or "openskill"
+            self.queue_channel = queue_channel
+            self.status_channel = status_channel
+            self.results_channel = results_channel
+            self.leaderboard_channel = leaderboard_channel
+            # Tournament-format Ladders never auto-complete by time.
+            self.duration = duration_seconds if duration_seconds is not None else float("inf")
+
         # Synthetic Tournament satisfies MatchGraph's required arg.
         # Ladder is its own session type; doesn't register with
         # tournament_state's scope_to_tournament map.
-        synth_tournament = Tournament(
-            title=self.name,
-            scope=self.queue_channel,
-        )
-        super().__init__(synth_tournament, [], stream=streamed)
-        # Players are populated via add_new_player after `begin()`.
-        self.players = []
+        if tournament is None:
+            tournament = Tournament(
+                title=self.name,
+                scope=self.queue_channel,
+            )
+        super().__init__(tournament, players or [], stream=streamed)
+        # Default to empty player list (Discord path populates via
+        # add_new_player); tournament-format path can pass non-empty players.
+        if players is None:
+            self.players = []
 
     def _now(self):
         return self._time_fn()
