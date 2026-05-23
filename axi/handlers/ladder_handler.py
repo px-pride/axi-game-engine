@@ -58,7 +58,7 @@ def matchmaking():
 
     # Clear stream match if needed.
     for l in state.ladders.values():
-        if state.stream_pairs[l] and l.get_matches_by_pair(state.stream_pairs[l][0], state.stream_pairs[l][1])[-1].check_match_over():
+        if state.stream_pairs[l] and l.get_matches_by_pair(state.stream_pairs[l][0], state.stream_pairs[l][1])[-1].completed():
             state.stream_pairs[l] = None
 
     # Identify available players by ladder.
@@ -119,18 +119,14 @@ def matchmaking():
     # Finalize best hypothesis.
     results = dict()
     for l in best_pairings:
-        results[l] = l.matchmaking(best_pairings[l][0], best_pairings[l][1], best_set_stream_match[l])
+        nodes, _internal_effects = l.matchmaking(
+            best_pairings[l][0], best_pairings[l][1], best_set_stream_match[l])
+        results[l] = nodes
         state.stream_pairs[l] = best_set_stream_match[l]
         if best_set_stream_match[l]:
             state.stream_history[l].append(best_set_stream_match[l])
-        for m in results[l]:
-            if m.checkin_timer:
-                effects.append(ScheduleCallback(
-                    delay_seconds=m.checkin_timer,
-                    callback_name="resolve_checkins",
-                    callback_args={"match_id": id(m)},
-                    keys=m.players,
-                    suffix="checkin"))
+        # Checkin scheduling happens in call_matches() once we have the
+        # actual Match object (id needed for the resolve_checkins callback).
     return effects
 
 def generate_pairing_hypothesis(ladder, available):
@@ -454,25 +450,59 @@ def update_ladders(echo=True):
     return effects
 
 def call_matches():
+    """Consume each ladder's pending MatchNodes:
+      - launch the underlying Match via match_handler.launch_match
+      - register node↔match in tournament_state
+      - prepare Discord UX (CreateMatchThread / PresentDecision / ...)
+      - schedule the checkin resolver callback
+
+    Post-Phase-5a Ladder.matchmaking populates `called_matches` with
+    MatchNodes (not real Match objects). Phase 5a's flow: defer the
+    `launch_match` call to here, then map node↔match in tournament_state
+    so `match_handler.close_match → ladder.advance(match)` can find
+    the MatchNode again.
+    """
+    from axi.tournament_state import state as tournament_state
     effects = []
     for l in state.ladders.values():
         called = copy(l.called_matches)
-        for m in called:
-            launch_msg = f"Launching {l.game.upper()}: {m.players[0]} vs. {m.players[1]}.\n"
+        for node in called:
+            actual_match = match_handler.launch_match(
+                l.game, node.players,
+                mode=node.mode,
+                ladder=l,
+                best_of=node.best_of,
+                checkin_timer=node.checkin_timer,
+                label=node.label,
+            )
+            if actual_match is None:
+                l.called_matches.remove(node)
+                continue
+            tournament_state.map_node_to_match(node.node_id, id(actual_match))
+            actual_match.streamed = node.streamed
+
+            launch_msg = f"Launching {l.game.upper()}: {node.players[0]} vs. {node.players[1]}.\n"
             stream_notice = None
-            if m.streamed and state.streamers.get(l):
+            if node.streamed and state.streamers.get(l):
                 streamer = state.streamers[l]
                 stream_notice = (
                     ':tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv:\n'
                     f'**STREAMED.** Please wait for {streamer.parse(mention=True)} to spectate!'
                     '\n:tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv: :tv:\n\n')
             effects += match_handler.prepare_match_ux(
-                m, l.game,
+                actual_match, l.game,
                 channel_name=l.queue_channel,
                 guild_id=l.guild.id,
                 stream_notice=stream_notice,
                 launch_message=launch_msg)
-            l.called_matches.remove(m)
+            if node.checkin_timer:
+                effects.append(ScheduleCallback(
+                    delay_seconds=node.checkin_timer,
+                    callback_name="resolve_checkins",
+                    callback_args={"match_id": id(actual_match)},
+                    keys=node.players,
+                    suffix="checkin"))
+            l.called_matches.remove(node)
     return effects
 
 def status(user, guild, channel):
@@ -531,12 +561,19 @@ def history(user, guild, channel):
     if user not in phase.status_by_player and not phase.add_new_player(user):
         msg += f"Sorry, the ladder is closed.\n"
     else:
-        matches = phase.get_matches_by_player(user)
-        if not matches:
+        from axi.tournament_state import state as tournament_state
+        nodes = phase.get_matches_by_player(user)
+        if not nodes:
             msg += "No matches yet.\n"
         else:
-            for match in matches:
-                msg += match.description(pov=user)
+            for node in nodes:
+                match_id = tournament_state.get_match_for_node(node.node_id)
+                actual = match_handler.state.matches_by_id.get(match_id)
+                if actual is not None and hasattr(actual, "description"):
+                    msg += actual.description(pov=user)
+                else:
+                    # Fallback to MatchNode info if the underlying Match was archived.
+                    msg += f"{node.label}: {node.players[0]} vs {node.players[1]} ({node.score[0]}-{node.score[1]})\n"
         msg += "\n"
     return msg
 
