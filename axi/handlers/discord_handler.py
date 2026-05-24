@@ -191,10 +191,16 @@ async def execute_effects(effects):
             delay = effect.delay_seconds
             keys = effect.keys
             suffix = effect.suffix
-            async def _cb(n=name, a=args):
-                await execute_callback(n, a)
-            await schedule_handler.schedule_event(
-                time() + delay, _cb, keys=keys, suffix=suffix)
+            fire_at = time() + delay
+            if getattr(effect, "persist", False):
+                # Phase 11: persist via callback registry path.
+                await schedule_handler.schedule_event_persistent(
+                    fire_at, name, args, keys=keys, suffix=suffix)
+            else:
+                async def _cb(n=name, a=args):
+                    await execute_callback(n, a)
+                await schedule_handler.schedule_event(
+                    fire_at, _cb, keys=keys, suffix=suffix)
 
         # ---- Phase 9: check-in lifecycle effects ----
 
@@ -727,6 +733,15 @@ async def displayname(ctx, name: str):
 
 
 # --- Event handlers ---
+
+@bot.event
+async def on_ready():
+    """Bot ready event — Phase 11: replay persisted scheduler state."""
+    try:
+        await schedule_handler.startup_replay()
+    except Exception:
+        pass
+
 
 @bot.event
 async def on_message(message):

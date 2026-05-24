@@ -136,6 +136,30 @@ def initialize_basic_tables():
         """)
     connection.commit()
 
+    # Phase 11: scheduled_callbacks (DB-backed timer events; survive
+    # restarts via schedule_handler.startup_replay)
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS scheduled_callbacks(
+           fire_at REAL,
+           callback_name TEXT,
+           kwargs_json TEXT,
+           keys_json TEXT,
+           suffix TEXT,
+           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+        """)
+    connection.commit()
+
+    # Phase 11: startup_callbacks (replay-on-restart events; no
+    # specific fire time — just invoked at startup_replay)
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS startup_callbacks(
+           callback_name TEXT,
+           kwargs_json TEXT,
+           guild_id INT,
+           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+        """)
+    connection.commit()
+
 initialize_basic_tables()
 
 def add_game(name):

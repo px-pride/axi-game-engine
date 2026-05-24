@@ -60,12 +60,19 @@ class UpdateLadderUI:
 
 @dataclass
 class ScheduleCallback:
-    """Schedule a delayed operation."""
+    """Schedule a delayed operation.
+
+    Phase 11: `persist=True` routes through `schedule_handler
+    .schedule_event_persistent` so the event survives bot restarts via
+    `scheduled_callbacks` DB table. Default False keeps the
+    in-memory-only behavior of pre-Phase-11 callsites.
+    """
     delay_seconds: float
     callback_name: str   # identifies which operation to run
     callback_args: dict = field(default_factory=dict)
     keys: list = None     # deduplication keys for schedule_handler
     suffix: str = None    # deduplication suffix for schedule_handler
+    persist: bool = False  # Phase 11: persist to DB for restart-recovery
 
 
 @dataclass
