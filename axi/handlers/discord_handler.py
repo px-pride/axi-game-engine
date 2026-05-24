@@ -26,7 +26,10 @@ from axi.effects import (
     SendUserMessages, SendToThread, SendToChannel,
     PresentDecision, CreateMatchThread, ArchiveThread,
     UpdateLadderUI, ScheduleCallback,
+    CreateCheckinPost, CollectReactors, AddReactorsToTournament,
+    MentionReactors, EditScheduledEventDescription,
 )
+import axi.handlers.checkin_handler as checkin_handler
 
 # --- Discord-specific state (adapter layer) ---
 # These track the mapping between Discord objects and match objects.
@@ -192,6 +195,104 @@ async def execute_effects(effects):
                 await execute_callback(n, a)
             await schedule_handler.schedule_event(
                 time() + delay, _cb, keys=keys, suffix=suffix)
+
+        # ---- Phase 9: check-in lifecycle effects ----
+
+        elif isinstance(effect, CreateCheckinPost):
+            guild = bot.get_guild(effect.guild_id)
+            if not guild:
+                continue
+            channel = get(guild.channels, name=effect.channel_name)
+            if not channel:
+                continue
+            # Header image first, then the message + reaction.
+            if effect.header_image_path:
+                try:
+                    await send_long(channel, "", file=effect.header_image_path)
+                except Exception:
+                    pass
+            post = await send_long(channel, effect.message)
+            if post and effect.reaction_emoji:
+                try:
+                    await post.add_reaction(effect.reaction_emoji)
+                except Exception:
+                    pass
+            # Store the post id on the scope's tournament/ladder.
+            if post:
+                _record_checkins_post_id(effect.scope, post.id)
+
+        elif isinstance(effect, CollectReactors):
+            # Adapter-side: fetch the message + reactions, route IDs back
+            # to whatever caller invoked this. Phase 9 slash commands fetch
+            # inline rather than via this effect, so this is a no-op stub
+            # for future symmetric callers.
+            pass
+
+        elif isinstance(effect, AddReactorsToTournament):
+            tournament = _get_tournament_for_scope(effect.scope)
+            if tournament is None:
+                continue
+            users = []
+            for uid in effect.user_ids:
+                u = bot.get_user(uid)
+                if u and not u.bot:
+                    axi_user = user_handler.get_user(None, u)
+                    if axi_user is not None:
+                        users.append(axi_user)
+            if users and hasattr(tournament, "add_players"):
+                tournament.add_players(users)
+
+        elif isinstance(effect, MentionReactors):
+            guild = bot.get_guild(effect.guild_id)
+            if not guild:
+                continue
+            channel = get(guild.channels, name=effect.channel_name)
+            if not channel:
+                continue
+            mention_text = " ".join(f"<@{uid}>" for uid in effect.user_ids)
+            full = (effect.message_prefix or "") + mention_text + (effect.message_suffix or "")
+            if full.strip():
+                await send_long(channel, full)
+
+        elif isinstance(effect, EditScheduledEventDescription):
+            # Lookup the event by id across all guilds the bot is in.
+            event = None
+            for guild in bot.guilds:
+                for ev in await guild.fetch_scheduled_events():
+                    if ev.id == effect.event_id:
+                        event = ev
+                        break
+                if event:
+                    break
+            if event:
+                try:
+                    await event.edit(description=effect.description)
+                except Exception:
+                    pass
+
+
+def _get_tournament_for_scope(scope):
+    """Resolve a scope (channel name) → Tournament or Ladder.
+
+    Tries ladder_handler first (most common), then tournament_state.
+    """
+    for key, ladder in ladder_handler.state.ladders.items():
+        if key[1] == scope:
+            return ladder
+    try:
+        from axi.tournament_state import state as tstate
+        for t in tstate.tournaments.values():
+            if getattr(t, "scope", None) == scope:
+                return t
+    except Exception:
+        pass
+    return None
+
+
+def _record_checkins_post_id(scope, post_id):
+    target = _get_tournament_for_scope(scope)
+    if target is not None:
+        target.checkins_post_id = post_id
 
 
 async def execute_callback(callback_name, callback_args):
@@ -738,3 +839,162 @@ async def update_leaderboard_channel(l):
         await l.leaderboard_message.edit(content=msg)
     else:
         l.leaderboard_message = await send_long(leaderboard_channel, msg)
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: check-in lifecycle slash commands
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="createcheckins",
+                  description="Post the check-in announcement for a scheduled event.")
+async def createcheckins(ctx, event_id: str, channel_name: str = None):
+    """Post check-in announcement. `event_id` is the Discord scheduled
+    event id (as a string for Discord slash arg compat). `channel_name`
+    defaults to the current channel."""
+    pinned = channel_name or ctx.channel.name
+    scope = pinned
+    try:
+        event = await ctx.guild.fetch_scheduled_event(int(event_id))
+    except Exception as e:
+        await ctx.response.send_message(f"Event lookup failed: {e}")
+        return
+    start_time = int(event.start_time.timestamp())
+    signup_ids = [user.id async for user in event.users()]
+    effects = checkin_handler.create_checkins(
+        scope=scope,
+        guild_id=ctx.guild.id,
+        pinned_channel=pinned,
+        start_time=start_time,
+        signup_user_ids=signup_ids,
+    )
+    await ctx.response.send_message("Check-ins posted.")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="reacts", description="List users who reacted to a message.")
+async def reacts(ctx, msg_id: str):
+    """List users who reacted to the given message id (in the current channel)."""
+    try:
+        msg = await ctx.channel.fetch_message(int(msg_id))
+    except Exception as e:
+        await ctx.response.send_message(f"Message lookup failed: {e}")
+        return
+    user_ids = []
+    for reaction in msg.reactions:
+        async for u in reaction.users():
+            if not u.bot and u.id not in user_ids:
+                user_ids.append(u.id)
+    if not user_ids:
+        await ctx.response.send_message("No reactions.")
+        return
+    lines = "\n".join(f"<@{uid}>" for uid in user_ids)
+    await ctx.response.send_message(f"Reactors:\n{lines}")
+
+
+@bot.tree.command(name="addfromreacts",
+                  description="Add users who reacted to a message to the tournament for this channel.")
+async def addfromreacts(ctx, msg_id: str = None):
+    """Add reactors as players. msg_id defaults to the channel's tournament's checkins_post_id."""
+    scope = ctx.channel.name
+    target = _get_tournament_for_scope(scope)
+    if msg_id is None:
+        if target is None or target.checkins_post_id is None:
+            await ctx.response.send_message("No check-ins post on file for this channel.")
+            return
+        message_id = target.checkins_post_id
+    else:
+        message_id = int(msg_id)
+    try:
+        msg = await ctx.channel.fetch_message(message_id)
+    except Exception as e:
+        await ctx.response.send_message(f"Message lookup failed: {e}")
+        return
+    user_ids = []
+    for reaction in msg.reactions:
+        async for u in reaction.users():
+            if not u.bot and u.id not in user_ids:
+                user_ids.append(u.id)
+    effects = checkin_handler.add_from_reacts(scope=scope, reaction_user_ids=user_ids)
+    await ctx.response.send_message(f"Adding {len(user_ids)} reactor(s).")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="mentionfromreacts",
+                  description="Tag all users who reacted to a message.")
+async def mentionfromreacts(ctx, msg_id: str):
+    """Ping everyone who reacted."""
+    scope = ctx.channel.name
+    try:
+        msg = await ctx.channel.fetch_message(int(msg_id))
+    except Exception as e:
+        await ctx.response.send_message(f"Message lookup failed: {e}")
+        return
+    user_ids = []
+    for reaction in msg.reactions:
+        async for u in reaction.users():
+            if not u.bot and u.id not in user_ids:
+                user_ids.append(u.id)
+    effects = checkin_handler.mention_from_reacts(
+        scope=scope,
+        guild_id=ctx.guild.id,
+        channel_name=scope,
+        reaction_user_ids=user_ids,
+    )
+    await ctx.response.send_message("Pinging reactors.")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="checkin", description="Self check-in to the current channel's event.")
+async def checkin(ctx):
+    """Self check-in: equivalent to reacting to the check-ins post."""
+    scope = ctx.channel.name
+    target = _get_tournament_for_scope(scope)
+    if target is None or target.checkins_post_id is None:
+        await ctx.response.send_message("No active check-ins for this channel.")
+        return
+    try:
+        msg = await ctx.channel.fetch_message(target.checkins_post_id)
+        await msg.add_reaction("\N{THUMBS UP SIGN}")
+    except Exception as e:
+        await ctx.response.send_message(f"Couldn't react: {e}")
+        return
+    await ctx.response.send_message(f"{ctx.user.mention} checked in\!")
+
+
+# Aliases for ergonomic check-in
+@bot.tree.command(name="here", description="Alias for /checkin.")
+async def here(ctx):
+    await checkin.callback(ctx)
+
+
+@bot.tree.command(name="yes", description="RSVP yes to the active scheduled event in this channel.")
+async def yes(ctx):
+    scope = ctx.channel.name
+    target = _get_tournament_for_scope(scope)
+    if target is None or target.checkins_post_id is None:
+        await ctx.response.send_message("No active RSVPs for this channel.")
+        return
+    try:
+        msg = await ctx.channel.fetch_message(target.checkins_post_id)
+        await msg.add_reaction("\N{THUMBS UP SIGN}")
+    except Exception as e:
+        await ctx.response.send_message(f"Couldn't react: {e}")
+        return
+    await ctx.response.send_message(f"{ctx.user.mention}: yes\!")
+
+
+@bot.tree.command(name="no", description="RSVP no to the active scheduled event in this channel.")
+async def no(ctx):
+    scope = ctx.channel.name
+    target = _get_tournament_for_scope(scope)
+    if target is None or target.checkins_post_id is None:
+        await ctx.response.send_message("No active RSVPs for this channel.")
+        return
+    try:
+        msg = await ctx.channel.fetch_message(target.checkins_post_id)
+        await msg.remove_reaction("\N{THUMBS UP SIGN}", ctx.user)
+    except Exception as e:
+        await ctx.response.send_message(f"Couldn't remove reaction: {e}")
+        return
+    await ctx.response.send_message(f"{ctx.user.mention}: no\!")

@@ -31,6 +31,9 @@ class Tournament:
         # Multibracket linkage; set by series_handler.register_tournament.
         self.multibracket_id = multibracket_id
         self.series_ctr = None
+        # Phase 9: id of the check-in announcement message (set by
+        # discord adapter when /createcheckins posts).
+        self.checkins_post_id = None
         self.rng = random.Random(seed) if seed is not None else random.Random()
 
         self.players = []

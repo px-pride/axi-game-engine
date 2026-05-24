@@ -63,6 +63,9 @@ class Ladder(MatchGraph):
         self.streamed = streamed
         self.status_message = None
         self.leaderboard_message = None
+        # Phase 9: id of the check-in announcement message (set by
+        # discord adapter when /createcheckins posts).
+        self.checkins_post_id = None
         self._time_fn = time_fn or _time_module.time
 
         if config is not None:

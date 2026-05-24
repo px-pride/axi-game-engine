@@ -122,3 +122,64 @@ class UpdateLavaUI:
     lava_level: float
     placement_snapshot: int
     players_in_danger: list   # [user_id: int]
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: Event check-in lifecycle effects
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CreateCheckinPost:
+    """Post the check-in announcement (header image + message + reaction).
+
+    Adapter posts the header image first, then the message, then attaches
+    the reaction emoji to the message. Adapter captures the message id
+    and writes it back via the supplied callback / handler routing.
+    """
+    guild_id: int
+    channel_name: str
+    header_image_path: str        # e.g. "axi/assets/discord_header_checkins.png"
+    message: str
+    reaction_emoji: str           # e.g. "\N{THUMBS UP SIGN}"
+    scope: str                    # for adapter to route back the message_id
+
+
+@dataclass
+class CollectReactors:
+    """Adapter fetches users who reacted to the given message and routes
+    them back via checkin_handler. Returns nothing directly; the adapter
+    inlines the fetch + handler dispatch."""
+    guild_id: int
+    channel_name: str
+    message_id: int
+
+
+@dataclass
+class AddReactorsToTournament:
+    """Add a list of users (by id) to the tournament for this scope.
+
+    The adapter resolves user_ids → AxiUser instances, then calls
+    `tournament.add_players(users)` for the scope's active tournament.
+    """
+    scope: str
+    user_ids: list                # list[int]
+
+
+@dataclass
+class MentionReactors:
+    """Post a message mentioning all users who reacted (typically used
+    for the 5-min-out reminder)."""
+    guild_id: int
+    channel_name: str
+    user_ids: list                # list[int]
+    message_prefix: str = ""      # optional leading text
+    message_suffix: str = ""      # optional trailing text
+
+
+@dataclass
+class EditScheduledEventDescription:
+    """Edit a Discord scheduled event's description (e.g. flip to
+    'CHECK-INS ARE OPEN!' then 'THE LADDER HAS BEGUN!')."""
+    event_id: int
+    description: str
