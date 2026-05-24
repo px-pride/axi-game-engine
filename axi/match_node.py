@@ -88,3 +88,13 @@ class MatchNode:
 
     def get_score(self):
         return f"{self.score[0]}-{self.score[1]}"
+
+    def undo(self):
+        """Phase 10: revert this node to ASLEEP state. Clears score,
+        checkins, reports, and checkin_deadline. Does NOT touch parents/
+        children/players — those propagate through MatchGraph.undo_match."""
+        self.status = MATCH_STATUS_ASLEEP
+        self.score = [0, 0]
+        self.checkins.clear()
+        self.reports.clear()
+        self.checkin_deadline = None

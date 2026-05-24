@@ -34,6 +34,9 @@ class Tournament:
         # Phase 9: id of the check-in announcement message (set by
         # discord adapter when /createcheckins posts).
         self.checkins_post_id = None
+        # Phase 10: checkpoint counter + last saved checkpoint id.
+        self.checkpoint_ctr = 0
+        self.checkpoint_id = None
         self.rng = random.Random(seed) if seed is not None else random.Random()
 
         self.players = []
@@ -91,7 +94,10 @@ class Tournament:
             return []
         graph = self.phase_fns[self.phase_id](self, self._players_for_phase())
         self.phases.append(graph)
-        return graph.begin()
+        result = graph.begin()
+        # Phase 10: snapshot state after phase advance.
+        self.save_checkpoint()
+        return result
 
     def _players_for_phase(self):
         """Players entering the current phase. Default: all players still
@@ -128,12 +134,14 @@ class Tournament:
         if user not in self.players:
             return []
         self.drop_dict[user].append(self.phase_id)
+        self.save_checkpoint()  # Phase 10
         return []
 
     def dq_user(self, user):
         if user not in self.players:
             return []
         self.dq_dict[user].append(self.phase_id)
+        self.save_checkpoint()  # Phase 10
         return []
 
     def is_dropped(self, user):
@@ -219,8 +227,12 @@ class Tournament:
         return None
 
     def save_checkpoint(self):
-        """Stub for Phase 10 — DB-backed checkpoint persistence lives there."""
-        return None
+        """Persist current tournament state. Phase 10 implementation."""
+        from axi.handlers import checkpoint_handler
+        try:
+            return checkpoint_handler.save_checkpoint(self)
+        except Exception:
+            return None
 
     def reduce_double_jeopardy(self, players):
         """For RR → DE seeding: prevent rematches by swapping pairs in the

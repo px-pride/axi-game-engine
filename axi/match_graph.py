@@ -251,6 +251,12 @@ class MatchGraph(ABC):
             self.placements_dict[loser] = node.loser_gets
 
         effects.append(ArchiveTournamentMatch(node_id=node.node_id))
+        # Phase 10: auto-checkpoint after every match completion.
+        try:
+            if hasattr(self.tournament, "save_checkpoint"):
+                self.tournament.save_checkpoint()
+        except Exception:
+            pass
         return effects
 
     def _child_ready(self, child):
@@ -370,10 +376,31 @@ class MatchGraph(ABC):
         return effects
 
     def undo_drop_user(self, user):
-        return []
+        """Undo a drop: scan completed matches involving `user`, cascade
+        undo each, then clear the user's drop_dict entry."""
+        drop_phases = self.tournament.drop_dict.get(user, [])
+        if not drop_phases:
+            return []
+        effects = []
+        for node in list(self.nodes_by_id.values()):
+            if user in getattr(node, "players", []) and node.completed():
+                if not getattr(node, "is_bye", lambda: False)():
+                    effects += self.undo_match(node)
+        self.tournament.drop_dict.pop(user, None)
+        return effects
 
     def undo_dq_user(self, user):
-        return []
+        """Symmetric to undo_drop_user, but for dq_dict."""
+        dq_phases = self.tournament.dq_dict.get(user, [])
+        if not dq_phases:
+            return []
+        effects = []
+        for node in list(self.nodes_by_id.values()):
+            if user in getattr(node, "players", []) and node.completed():
+                if not getattr(node, "is_bye", lambda: False)():
+                    effects += self.undo_match(node)
+        self.tournament.dq_dict.pop(user, None)
+        return effects
 
     def get_placements(self):
         return sorted(

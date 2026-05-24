@@ -103,6 +103,39 @@ def initialize_basic_tables():
         """)
     connection.commit()
 
+    # Phase 10: tourney_checkpoints (full tournament state snapshot per
+    # checkpoint; one row per save, append-only)
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS tourney_checkpoints(
+           tourney_id TEXT,
+           checkpoint_ctr INT,
+           status INT,
+           player_state_str TEXT,
+           match_checkpoints_str TEXT,
+           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+        """)
+    connection.commit()
+
+    # Phase 10: match_checkpoints (per-match snapshot, references the
+    # parent tourney_checkpoints row)
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS match_checkpoints(
+           match_id INT,
+           tourney_checkpoint_id INT,
+           checkpoint_ctr INT,
+           status INT,
+           user_id_a INT,
+           user_id_b INT,
+           score_a INT,
+           score_b INT,
+           parent_k_a INT,
+           parent_v_a TEXT,
+           parent_k_b INT,
+           parent_v_b TEXT,
+           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+        """)
+    connection.commit()
+
 initialize_basic_tables()
 
 def add_game(name):
