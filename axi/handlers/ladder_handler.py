@@ -103,14 +103,20 @@ def matchmaking():
         # Create hypothesis.
         pairings = dict()
         set_stream_match = dict()
+        drowning = dict()
         for l in state.ladders.values():
             if not l.completed():
                 pairings[l] = generate_pairing_hypothesis(l, setting[l])
                 set_stream_match[l] = select_random_stream_match(l, pairings[l]) if state.streamers[l] else None
+                # Phase 7: per-ladder drowning set for scoring weights.
+                # Friendlies (base Ladder) returns no drowning; LadderElim
+                # returns its lava-derived partition.
+                _afloat, drowning_list = l.afloat_and_drowning(setting[l], [])
+                drowning[l] = set(drowning_list)
 
         # Score hypothesis with stream match.
         score = score_hypothesis(
-            pairings, set_stream_match)
+            pairings, set_stream_match, drowning)
         if score >= best_score:
             best_score = score
             best_pairings = pairings
@@ -195,13 +201,29 @@ def select_random_stream_match(l, pairings):
         return None
     return stream_match
 
-def score_hypothesis(pairings, stream_match_hypothesis):
+def score_hypothesis(pairings, stream_match_hypothesis, drowning=None):
+    """Score a cross-ladder pairing + stream-match hypothesis.
+
+    Phase 7 additions:
+      - `drowning` arg (Dict[Ladder, Set[player]]): per-ladder drowning
+        players. Adds `w_num_drowning=50` per drowning player per
+        viable pair and `w_stream_drowning=50` if the stream match
+        has drowning players. Defaults to empty dict.
+      - `desired_stream_ladder_ratio` switched from uniform 1/N to
+        source's primary-biased [0.5, 0.5/(N-1), ...] (first ladder
+        in iteration order is primary).
+      - Fixes the bare `ladders.values()` NameError at the old line 275.
+    """
     score = 0
     printing = False
+
+    if drowning is None:
+        drowning = {}
 
     w_num_pairs = 100        # ++
     w_repeat_pairs = 60     # -
     w_rating_diff = 25      # -
+    w_num_drowning = 50     # ++ Phase 7
     w_high_ratings = 0.2     # -
     for l in pairings:
         # Value: total number of pairs.
@@ -211,6 +233,7 @@ def score_hypothesis(pairings, stream_match_hypothesis):
             print("Score: " + str(w_num_pairs * len(pairings[l][0] + pairings[l][1])))
             print("Score: " + str(score))
 
+        drowning_for_l = drowning.get(l, set())
         for x in pairings[l][0] + pairings[l][1]:
             p0 = x[0]
             p1 = x[1]
@@ -221,6 +244,15 @@ def score_hypothesis(pairings, stream_match_hypothesis):
                 print("Repeat pairs: " + str(l.matches_by_pair[p0][p1]))
                 print("Score: " + str(-w_repeat_pairs * len(l.matches_by_pair[p0][p1])))
                 print("Score: " + str(score))
+
+            # Value (Phase 7): drowning players in this pair.
+            for p in (p0, p1):
+                if p in drowning_for_l:
+                    score += w_num_drowning
+                    if printing:
+                        print(f"Drowning: {p}")
+                        print(f"Score: {w_num_drowning}")
+                        print(f"Score: {score}")
 
             # Devalue: pairs with high rating differences.
             score -= w_rating_diff * abs(l.ratings_by_player[p0][0] - l.ratings_by_player[p1][0]) / 100
@@ -270,9 +302,24 @@ def score_hypothesis(pairings, stream_match_hypothesis):
         print("Score: " + str(score))
 
     w_stream_match_called = 80      # ++
+    w_stream_drowning = 50          # ++ Phase 7
     w_stream_match_repeat = 30      # -
     w_stream_ladder_diversity = 95  # ++
-    desired_stream_ladder_ratio = {l: 1.0 / len(state.ladders) for l in ladders.values()}
+
+    # Phase 7: primary-biased ladder ratio. First ladder in iteration
+    # order gets 0.5; remaining N-1 ladders split the other 0.5 equally.
+    # Fixes the prior NameError where `ladders.values()` was bare.
+    ladders_list = list(state.ladders.values())
+    desired_stream_ladder_ratio = {}
+    if ladders_list:
+        desired_stream_ladder_ratio[ladders_list[0]] = 0.5
+        if len(ladders_list) > 1:
+            per_secondary = 0.5 / (len(ladders_list) - 1)
+            for ll in ladders_list[1:]:
+                desired_stream_ladder_ratio[ll] = per_secondary
+        else:
+            # Single ladder: it gets the full 1.0 (was 0.5; rescale).
+            desired_stream_ladder_ratio[ladders_list[0]] = 1.0
 
     for l_ in stream_match_hypothesis:
         stream_pair = stream_match_hypothesis[l_]
@@ -285,6 +332,16 @@ def score_hypothesis(pairings, stream_match_hypothesis):
             print("Stream Pair: " + str(stream_pair))
             print("Score: " + str(w_stream_match_called))
             print("Score: " + str(score))
+
+        # Value (Phase 7): stream match has drowning player(s).
+        drowning_for_l = drowning.get(l_, set())
+        for p in stream_pair:
+            if p in drowning_for_l:
+                score += w_stream_drowning
+                if printing:
+                    print(f"Stream Drowning: {p}")
+                    print(f"Score: {w_stream_drowning}")
+                    print(f"Score: {score}")
 
         for p in stream_pair:
             # Devalue: repeat players on stream.
@@ -681,4 +738,4 @@ def load_from_ratings_db(ladder, p):
     return None
 
 def push_ladder_updates():
-    return [UpdateLadderUI(ladder_id=id(l)) for l in ladders.values()]
+    return [UpdateLadderUI(ladder_id=id(l)) for l in state.ladders.values()]

@@ -328,6 +328,16 @@ class Ladder(MatchGraph):
     def completed(self):
         return self._now() >= self.end_time
 
+    def afloat_and_drowning(self, users, breakers):
+        """Default: no drowning concept (friendlies). Subclasses
+        (e.g. LadderElimination) override with lava-derived partition.
+
+        Returns (afloat, drowning) where afloat = users+breakers and
+        drowning = []. Phase 7 handler-level scoring uses this uniform
+        API across all Ladder subclasses.
+        """
+        return list(users) + list(breakers), []
+
     def queue(self, user):
         self.status_by_player[user] = USER_STATUS_QUEUED
         self.start_downtime_clock(user)
