@@ -14,11 +14,23 @@ class Tournament:
     player colors, and preset wiring. All Discord I/O lives in effects.
     """
 
-    def __init__(self, title, scope, series=None, seed=None):
+    def __init__(self, title, scope, series=None, seed=None,
+                 series_id=None, multibracket_id=None):
         self.tournament_id = uuid.uuid4().hex
         self.title = title
         self.scope = scope
-        self.series = series
+        # Series can be a Series instance (preferred) or an int rowid.
+        # Both paths converge to self.series_id; the instance ref is
+        # kept for the series_handler.
+        if hasattr(series, "rowid"):
+            self.series = series
+            self.series_id = series.rowid
+        else:
+            self.series = None
+            self.series_id = series_id
+        # Multibracket linkage; set by series_handler.register_tournament.
+        self.multibracket_id = multibracket_id
+        self.series_ctr = None
         self.rng = random.Random(seed) if seed is not None else random.Random()
 
         self.players = []

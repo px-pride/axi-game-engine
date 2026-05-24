@@ -69,7 +69,37 @@ def initialize_basic_tables():
         """CREATE TABLE IF NOT EXISTS display_names(
            user_id INT PRIMARY KEY,
            display_name TEXT,
-           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP); 
+           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+        """)
+    connection.commit()
+
+    # Phase 8: series (recurring tournament lineage across episodes)
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS series(
+           guild_id INT,
+           name TEXT,
+           season INT,
+           game TEXT,
+           pinned_channel TEXT,
+           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+        """)
+    connection.commit()
+
+    # Phase 8: multibrackets (parallel brackets per event)
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS multibrackets(
+           name TEXT,
+           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+        """)
+    connection.commit()
+
+    # Phase 8: tourneys (joins Tournament → series + multibracket)
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS tourneys(
+           multibracket_id INT,
+           series_id INT,
+           series_ctr INT,
+           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
         """)
     connection.commit()
 
