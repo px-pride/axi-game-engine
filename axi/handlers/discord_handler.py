@@ -30,6 +30,8 @@ from axi.effects import (
     MentionReactors, EditScheduledEventDescription,
 )
 import axi.handlers.checkin_handler as checkin_handler
+import axi.handlers.pxl_handler as pxl_handler  # noqa: F401 — registers callbacks at import
+import axi.pxl_config as pxl_config
 
 # --- Discord-specific state (adapter layer) ---
 # These track the mapping between Discord objects and match objects.
@@ -1063,3 +1065,124 @@ async def allscopes(ctx):
         return
     lines = "\n".join(f"- `{s}`" for s in scopes)
     await ctx.response.send_message(f"Scopes in this guild:\n{lines}")
+
+
+# ---------------------------------------------------------------------------
+# Phase 13: PXL config + /createfromconfig
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(
+    name="createfromconfig",
+    description="Schedule events/series from a PXL config file (admin only).")
+@has_permissions(ban_members=True)
+async def createfromconfig(ctx, attachment: discord.Attachment):
+    """Parse a PXL config attachment and schedule its full lifecycle.
+
+    Reads the uploaded INI file, walks each episode/bracket, and
+    registers DB-backed scheduled callbacks (pxl_initial_announcement,
+    pxl_final_announcement, pxl_create_event, pxl_create_checkins,
+    pxl_final_checkins_reminder, pxl_begin_event) via Phase 11's
+    persistent scheduler.
+    """
+    try:
+        content_bytes = await attachment.read()
+        content = content_bytes.decode("utf-8")
+    except Exception as e:
+        await ctx.response.send_message(f"Couldn't read attachment: {e}")
+        return
+    try:
+        config = pxl_config.parse_config(content)
+    except pxl_config.PxlConfigError as e:
+        await ctx.response.send_message(f"Config parse error: {e}")
+        return
+
+    guild_id = config.guild_id or ctx.guild.id
+    n_scheduled = 0
+    for ep in config.iter_episodes():
+        start_ts = ep.start_time.timestamp()
+        # Compute per-lifecycle absolute fire times.
+        ann_initial_at = (ep.start_time
+                          - (config.announcement_initial_offset
+                             or timedelta(0))).timestamp()
+        ann_final_at = (ep.start_time
+                        - (config.announcement_final_offset
+                           or timedelta(0))).timestamp()
+        checkins_initial_at = (ep.start_time
+                               - (config.checkins_initial_offset
+                                  or timedelta(0))).timestamp()
+        checkins_final_at = (ep.start_time
+                             - (config.checkins_final_offset
+                                or timedelta(0))).timestamp()
+
+        for bracket in ep.brackets:
+            ann_channel = (config.announcement_channel
+                           or bracket.event_channel)
+            event_name = bracket.title
+            scope = (bracket.event_channel or "").upper()
+
+            # 1. Initial announcement.
+            await schedule_handler.schedule_event_persistent(
+                ann_initial_at, "pxl_initial_announcement", kwargs={
+                    "guild_id": guild_id,
+                    "channel": ann_channel,
+                    "message": (
+                        f"Upcoming: **{event_name}** — see scheduled event."),
+                    "image_path": config.announcement_initial_image,
+                })
+            # 2. Final announcement.
+            await schedule_handler.schedule_event_persistent(
+                ann_final_at, "pxl_final_announcement", kwargs={
+                    "guild_id": guild_id,
+                    "channel": ann_channel,
+                    "message": (
+                        f"Tonight: **{event_name}** — check in!"),
+                    "image_path": config.announcement_final_image,
+                })
+            # 3. Create the Discord scheduled event.
+            await schedule_handler.schedule_event_persistent(
+                ann_initial_at, "pxl_create_event", kwargs={
+                    "guild_id": guild_id,
+                    "title": bracket.title,
+                    "description": bracket.description,
+                    "image_path": bracket.image,
+                    "start_timestamp": start_ts,
+                    "event_channel": bracket.event_channel,
+                })
+            # 4. Create check-ins post.
+            await schedule_handler.schedule_event_persistent(
+                checkins_initial_at, "pxl_create_checkins", kwargs={
+                    "guild_id": guild_id,
+                    "scope": scope,
+                    "pinned_channel": bracket.event_channel,
+                    "start_timestamp": start_ts,
+                    "signup_user_ids": [],
+                })
+            # 5. Final check-ins reminder.
+            await schedule_handler.schedule_event_persistent(
+                checkins_final_at, "pxl_final_checkins_reminder", kwargs={
+                    "guild_id": guild_id,
+                    "scope": scope,
+                    "pinned_channel": bracket.event_channel,
+                    "event_name": event_name,
+                    "signup_user_ids": [],
+                    "checkin_user_ids": [],
+                    "minutes_until_open": 5,
+                })
+            # 6. Begin event.
+            await schedule_handler.schedule_event_persistent(
+                start_ts, "pxl_begin_event", kwargs={
+                    "events_info": [{
+                        "scope": scope,
+                        "event_id": None,
+                        "tournament_title": event_name,
+                        "guild_id": guild_id,
+                        "channel_name": bracket.event_channel,
+                        "reactor_user_ids": [],
+                    }],
+                })
+            n_scheduled += 1
+
+    await ctx.response.send_message(
+        f"Scheduled {n_scheduled} bracket(s) across "
+        f"{config.count} episode(s) for `{config.name}`.")
