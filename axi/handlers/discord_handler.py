@@ -1013,3 +1013,53 @@ async def no(ctx):
         await ctx.response.send_message(f"Couldn't remove reaction: {e}")
         return
     await ctx.response.send_message(f"{ctx.user.mention}: no\!")
+
+
+# ---------------------------------------------------------------------------
+# Phase 12: scope/role system slash commands
+# ---------------------------------------------------------------------------
+
+
+from axi.tournament_state import state as _tournament_state
+
+
+@bot.tree.command(name="setscope",
+                  description="Set your active tournament scope.")
+async def setscope(ctx, scope: str):
+    """Set the caller's per-(caller, guild) scope for tournament
+    targeting. Subsequent admin commands resolve to this scope."""
+    _tournament_state.set_scope(
+        ctx.user, ctx.guild, ctx.channel, scope.upper(), admin=False)
+    await ctx.response.send_message(
+        f"Your active scope is now `{scope.upper()}`.")
+
+
+@bot.tree.command(name="setdefaultscope",
+                  description="Set the guild's default tournament scope (admin only).")
+@has_permissions(ban_members=True)
+async def setdefaultscope(ctx, scope: str):
+    """Set the guild-wide default scope. Admins only."""
+    _tournament_state.set_scope(
+        ctx.user, ctx.guild, ctx.channel, scope.upper(), admin=True)
+    await ctx.response.send_message(
+        f"Default scope for this guild is now `{scope.upper()}`.")
+
+
+@bot.tree.command(name="getscope",
+                  description="Print your active tournament scope.")
+async def getscope(ctx):
+    """Print the resolved active scope for the caller."""
+    scope = _tournament_state.get_scope(ctx.user, ctx.guild, ctx.channel)
+    await ctx.response.send_message(f"Your active scope: `{scope}`")
+
+
+@bot.tree.command(name="allscopes",
+                  description="List all known tournament scopes in this guild.")
+async def allscopes(ctx):
+    """List all known scopes in the current guild."""
+    scopes = _tournament_state.get_all_scopes(ctx.user, ctx.guild, ctx.channel)
+    if not scopes:
+        await ctx.response.send_message("No scopes registered yet.")
+        return
+    lines = "\n".join(f"- `{s}`" for s in scopes)
+    await ctx.response.send_message(f"Scopes in this guild:\n{lines}")
