@@ -71,6 +71,10 @@ class ClaudeCPU(AbstractCPU):
 
         return self._parse_response(response_text, options, num_decisions)
 
+    def generate_wand(self):
+        """Phase 16: sample 3 page-0 spells per shape (varied CPU play)."""
+        return self.generate_random_wand()
+
     async def _async_compute(self, prompt):
         response_text = ""
         sdk_options = ClaudeAgentOptions(

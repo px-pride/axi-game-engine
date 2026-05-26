@@ -9,3 +9,7 @@ class RandomCPU(AbstractCPU):
     def compute(self, options):
         return choice(options)
 
+    def generate_wand(self):
+        """Phase 16: sample 3 page-0 spells per shape (varied CPU play)."""
+        return self.generate_random_wand()
+

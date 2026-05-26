@@ -341,8 +341,24 @@ def wand_default():
                  ])
 
 def load_saved_wand(p):
+    """Phase 16: CPUs decide their own wand via generate_wand();
+    humans load from the structured `wands` table first, then fall
+    back to the legacy pickle-BLOB profile path."""
     if isinstance(p, AbstractCPU):
-        return wand_default()
+        # Each CPU subclass decides its wand. AbstractCPU.generate_wand
+        # defaults to wand_default(); SimpleCPU/ClaudeCPU/RandomCPU
+        # override to sample varied wands.
+        return p.generate_wand()
+    # Try structured wands table first.
+    user_id = getattr(p.uid, "id", None) if hasattr(p, "uid") else None
+    if user_id is not None:
+        try:
+            structured = WonderWandProfile.load_structured(user_id)
+        except Exception:
+            structured = None
+        if structured is not None:
+            return structured.get_equipped_wand()
+    # Fall back to legacy pickle BLOB.
     profile = load_profile(p, "wonderwand")
     if not profile:
         profile = WonderWandProfile()

@@ -160,6 +160,37 @@ def initialize_basic_tables():
         """)
     connection.commit()
 
+    # Phase 16: structured wand persistence — 9 spell slots indexed 0..8.
+    # Each slot is (emoji TEXT, page INT) — the (shape, color) pair
+    # extracted from the emoji + the spellbook page index uniquely
+    # identifies the spell when reconstructed via
+    # spells.generate_spellbook()[shape][page][color_idx].
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS wands(
+           user_id INT PRIMARY KEY,
+           name TEXT,
+           spell_emoji_0 TEXT,
+           spell_page_0 INT,
+           spell_emoji_1 TEXT,
+           spell_page_1 INT,
+           spell_emoji_2 TEXT,
+           spell_page_2 INT,
+           spell_emoji_3 TEXT,
+           spell_page_3 INT,
+           spell_emoji_4 TEXT,
+           spell_page_4 INT,
+           spell_emoji_5 TEXT,
+           spell_page_5 INT,
+           spell_emoji_6 TEXT,
+           spell_page_6 INT,
+           spell_emoji_7 TEXT,
+           spell_page_7 INT,
+           spell_emoji_8 TEXT,
+           spell_page_8 INT,
+           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+        """)
+    connection.commit()
+
 initialize_basic_tables()
 
 def add_game(name):
