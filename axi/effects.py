@@ -190,3 +190,44 @@ class EditScheduledEventDescription:
     'CHECK-INS ARE OPEN!' then 'THE LADDER HAS BEGUN!')."""
     event_id: int
     description: str
+
+
+# ---------------------------------------------------------------------------
+# Phase 14: Tournament lifecycle announcement effects
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AnnounceTourneyStart:
+    """Post the tournament-start message + reporting instructions."""
+    guild_id: int
+    channel_name: str
+    title: str
+    format: str
+
+
+@dataclass
+class AnnouncePhaseStart:
+    """Post the phase-start message + roster of participants."""
+    guild_id: int
+    channel_name: str
+    phase_name: str
+    player_mentions: list
+
+
+@dataclass
+class AnnouncePhaseEnd:
+    """Post the phase-end message + placements list."""
+    guild_id: int
+    channel_name: str
+    phase_name: str
+    placements: list                 # list[(rank: int, mention: str)]
+
+
+@dataclass
+class AnnounceTourneyEnd:
+    """Post the tournament-end message + winner congrats."""
+    guild_id: int
+    channel_name: str
+    title: str
+    winner_mention: str

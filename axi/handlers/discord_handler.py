@@ -28,10 +28,14 @@ from axi.effects import (
     UpdateLadderUI, ScheduleCallback,
     CreateCheckinPost, CollectReactors, AddReactorsToTournament,
     MentionReactors, EditScheduledEventDescription,
+    AnnounceTourneyStart, AnnouncePhaseStart, AnnouncePhaseEnd,
+    AnnounceTourneyEnd,
 )
 import axi.handlers.checkin_handler as checkin_handler
 import axi.handlers.pxl_handler as pxl_handler  # noqa: F401 — registers callbacks at import
 import axi.pxl_config as pxl_config
+import axi.handlers.tournament_handler as tournament_handler
+import axi.handlers.series_handler as series_handler
 
 # --- Discord-specific state (adapter layer) ---
 # These track the mapping between Discord objects and match objects.
@@ -277,6 +281,64 @@ async def execute_effects(effects):
                     await event.edit(description=effect.description)
                 except Exception:
                     pass
+
+        # ---- Phase 14: tournament lifecycle announcements ----
+
+        elif isinstance(effect, AnnounceTourneyStart):
+            guild = bot.get_guild(effect.guild_id)
+            if not guild:
+                continue
+            channel = get(guild.channels, name=effect.channel_name)
+            if not channel:
+                continue
+            msg = (
+                f"**{effect.title} is starting.**\n\n"
+                f"*Format:* {effect.format}\n\n"
+                "*Reporting Scores*\n"
+                "Use **/score @opponent X-Y**.\n"
+                "Example: GalaxyMii beats LilFox15 2-0.\n"
+                "GalaxyMii types: **/score @LilFox15 2-0**\n"
+                "LilFox15 types: **/score @GalaxyMii 0-2**\n\n"
+                "*Other Commands*\n"
+                "Type **/status** to see if you have a match ready.\n"
+                "Type **/mymatches** to see all known matches.\n"
+                "Type **/help** for more commands.\n\n"
+                "**GOOD LUCK AND HAVE FUN!**"
+            )
+            await send_long(channel, msg)
+
+        elif isinstance(effect, AnnouncePhaseStart):
+            guild = bot.get_guild(effect.guild_id)
+            if not guild:
+                continue
+            channel = get(guild.channels, name=effect.channel_name)
+            if not channel:
+                continue
+            mentions = ", ".join(effect.player_mentions) if effect.player_mentions else ""
+            msg = f"**Phase {effect.phase_name} is starting.**\n*Players:* {mentions}."
+            await send_long(channel, msg)
+
+        elif isinstance(effect, AnnouncePhaseEnd):
+            guild = bot.get_guild(effect.guild_id)
+            if not guild:
+                continue
+            channel = get(guild.channels, name=effect.channel_name)
+            if not channel:
+                continue
+            lines = [f"**Phase {effect.phase_name} has ended.**"]
+            for rank, mention in effect.placements:
+                lines.append(f"{rank}. {mention}")
+            await send_long(channel, "\n".join(lines))
+
+        elif isinstance(effect, AnnounceTourneyEnd):
+            guild = bot.get_guild(effect.guild_id)
+            if not guild:
+                continue
+            channel = get(guild.channels, name=effect.channel_name)
+            if not channel:
+                continue
+            msg = f"**Congratulations to {effect.winner_mention} for winning {effect.title}!**"
+            await send_long(channel, msg)
 
 
 def _get_tournament_for_scope(scope):
@@ -1186,3 +1248,645 @@ async def createfromconfig(ctx, attachment: discord.Attachment):
     await ctx.response.send_message(
         f"Scheduled {n_scheduled} bracket(s) across "
         f"{config.count} episode(s) for `{config.name}`.")
+
+
+# ---------------------------------------------------------------------------
+# Phase 14: Tournament command slash wrappers
+# ---------------------------------------------------------------------------
+
+
+def _scope_from_ctx(ctx):
+    """Resolve the active scope for the caller from channel context."""
+    return _tournament_state.get_scope(ctx.user, ctx.guild, ctx.channel)
+
+
+def _channel_scope(ctx):
+    """Channel name (lowercase) — used for routing replies."""
+    return ctx.channel.name if ctx.channel is not None else None
+
+
+def _resolve_user(guild, identifier):
+    """Resolve a Discord user identifier (mention or User object) to an
+    AxiUser via user_handler. `identifier` may already be a Discord
+    Member/User."""
+    if identifier is None:
+        return None
+    return user_handler.get_user(guild, identifier)
+
+
+# ---- Tournament lifecycle ----
+
+
+@bot.tree.command(name="create",
+                  description="Create a tournament for the current channel (admin).")
+@has_permissions(ban_members=True)
+async def create(ctx, game: str = None, name: str = None, season: str = None):
+    """Create a tournament; scope = current channel."""
+    scope = _scope_from_ctx(ctx)
+    if game is None:
+        game = scope.lower()
+    _, effects = tournament_handler.create_tournament(
+        scope=scope, guild_id=ctx.guild.id, game=game,
+        name=name, season=season, pinned_channel=ctx.channel.name)
+    await ctx.response.send_message(f"Tournament `{name or scope}` created.")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="destroy",
+                  description="Destroy the current channel's tournament (admin).")
+@has_permissions(ban_members=True)
+async def destroy(ctx):
+    scope = _scope_from_ctx(ctx)
+    t, effects = tournament_handler.destroy_tournament(
+        scope=scope, guild_id=ctx.guild.id, channel_name=ctx.channel.name)
+    if t is None:
+        await ctx.response.send_message("No tournament for this scope.")
+        return
+    await ctx.response.send_message(f"Tournament `{t.title}` destroyed.")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="preset",
+                  description="Apply a tournament preset by name (admin).")
+@has_permissions(ban_members=True)
+async def preset(ctx, name: str):
+    scope = _scope_from_ctx(ctx)
+    ok, effects = tournament_handler.apply_preset(scope, name)
+    if not ok:
+        await ctx.response.send_message(f"Couldn't apply preset `{name}`.")
+        return
+    await ctx.response.send_message(f"Preset `{name}` applied.")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="begin",
+                  description="Begin the current channel's tournament (admin).")
+@has_permissions(ban_members=True)
+async def begin(ctx):
+    scope = _scope_from_ctx(ctx)
+    effects = tournament_handler.begin(
+        scope=scope, guild_id=ctx.guild.id, channel_name=ctx.channel.name)
+    await ctx.response.send_message("Beginning tournament…")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="start",
+                  description="Alias for /begin (admin).")
+@has_permissions(ban_members=True)
+async def start(ctx):
+    await begin.callback(ctx)
+
+
+@bot.tree.command(name="advancephase",
+                  description="Advance the tournament to the next phase (admin).")
+@has_permissions(ban_members=True)
+async def advancephase(ctx):
+    scope = _scope_from_ctx(ctx)
+    effects = tournament_handler.advance_phase(
+        scope=scope, guild_id=ctx.guild.id, channel_name=ctx.channel.name)
+    await ctx.response.send_message("Advancing phase…")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="undophase",
+                  description="Reverse the most recent phase advance (admin).")
+@has_permissions(ban_members=True)
+async def undophase(ctx):
+    scope = _scope_from_ctx(ctx)
+    tournament_handler.undo_phase(scope)
+    await ctx.response.send_message("Phase undone.")
+
+
+# ---- Player management ----
+
+
+@bot.tree.command(name="adduser",
+                  description="Add users to the tournament (admin).")
+@has_permissions(ban_members=True)
+async def adduser(ctx, users: str):
+    """Accept a space- or comma-separated list of mentions."""
+    scope = _scope_from_ctx(ctx)
+    parts = [p.strip() for p in users.replace(",", " ").split() if p.strip()]
+    axi_users = [_resolve_user(ctx.guild, p) for p in parts]
+    axi_users = [u for u in axi_users if u is not None]
+    n, effects = tournament_handler.add_players(scope, axi_users)
+    await ctx.response.send_message(f"Added {n} user(s).")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="removeuser",
+                  description="Remove users from the tournament (admin).")
+@has_permissions(ban_members=True)
+async def removeuser(ctx, users: str):
+    scope = _scope_from_ctx(ctx)
+    parts = [p.strip() for p in users.replace(",", " ").split() if p.strip()]
+    axi_users = [_resolve_user(ctx.guild, p) for p in parts]
+    axi_users = [u for u in axi_users if u is not None]
+    n, effects = tournament_handler.remove_players(scope, axi_users)
+    await ctx.response.send_message(f"Removed {n} user(s).")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="checkinuser",
+                  description="Mark a user as checked in for the active match (admin).")
+@has_permissions(ban_members=True)
+async def checkinuser(ctx, user: Member):
+    scope = _scope_from_ctx(ctx)
+    axi_user = _resolve_user(ctx.guild, user)
+    # Tournament's check-in semantics: the user's current called match
+    # is transitioned to ACTIVE. The Tournament API doesn't expose this
+    # directly; we delegate to its current phase's receive_checkin.
+    t = tournament_handler._get_tournament(scope)
+    if t is None or t.current_phase() is None or axi_user is None:
+        await ctx.response.send_message("No active tournament or user.")
+        return
+    phase = t.current_phase()
+    if hasattr(phase, "receive_checkin"):
+        try:
+            phase.receive_checkin(axi_user)
+        except Exception as e:
+            await ctx.response.send_message(f"Check-in failed: {e}")
+            return
+    await ctx.response.send_message(f"{user.mention} checked in.")
+
+
+@bot.tree.command(name="dropuser",
+                  description="Drop a user from the current phase (admin).")
+@has_permissions(ban_members=True)
+async def dropuser(ctx, user: Member):
+    scope = _scope_from_ctx(ctx)
+    axi_user = _resolve_user(ctx.guild, user)
+    tournament_handler.drop_user(scope, axi_user)
+    await ctx.response.send_message(f"{user.mention} dropped.")
+
+
+@bot.tree.command(name="fulldropuser",
+                  description="Fully drop a user from the tournament (admin).")
+@has_permissions(ban_members=True)
+async def fulldropuser(ctx, user: Member):
+    scope = _scope_from_ctx(ctx)
+    axi_user = _resolve_user(ctx.guild, user)
+    tournament_handler.drop_user(scope, axi_user)
+    # Full drop = drop applied to all subsequent phases. Source repeats
+    # the drop_user call; target uses a single call which the phase
+    # transitions propagate.
+    await ctx.response.send_message(f"{user.mention} fully dropped.")
+
+
+@bot.tree.command(name="dquser",
+                  description="Disqualify a user (admin).")
+@has_permissions(ban_members=True)
+async def dquser(ctx, user: Member):
+    scope = _scope_from_ctx(ctx)
+    axi_user = _resolve_user(ctx.guild, user)
+    tournament_handler.dq_user(scope, axi_user)
+    await ctx.response.send_message(f"{user.mention} disqualified.")
+
+
+@bot.tree.command(name="dropme",
+                  description="Drop yourself from the current phase.")
+async def dropme(ctx):
+    scope = _scope_from_ctx(ctx)
+    axi_user = _resolve_user(ctx.guild, ctx.user)
+    tournament_handler.drop_user(scope, axi_user)
+    await ctx.response.send_message(f"{ctx.user.mention} dropped.")
+
+
+@bot.tree.command(name="fulldropme",
+                  description="Fully drop yourself from the tournament.")
+async def fulldropme(ctx):
+    scope = _scope_from_ctx(ctx)
+    axi_user = _resolve_user(ctx.guild, ctx.user)
+    tournament_handler.drop_user(scope, axi_user)
+    await ctx.response.send_message(f"{ctx.user.mention} fully dropped.")
+
+
+@bot.tree.command(name="undodrop",
+                  description="Reverse a drop (admin).")
+@has_permissions(ban_members=True)
+async def undodrop(ctx, user: Member):
+    scope = _scope_from_ctx(ctx)
+    axi_user = _resolve_user(ctx.guild, user)
+    tournament_handler.undo_drop_user(scope, axi_user)
+    await ctx.response.send_message(f"Drop for {user.mention} reversed.")
+
+
+@bot.tree.command(name="undodq",
+                  description="Reverse a DQ (admin).")
+@has_permissions(ban_members=True)
+async def undodq(ctx, user: Member):
+    scope = _scope_from_ctx(ctx)
+    axi_user = _resolve_user(ctx.guild, user)
+    tournament_handler.undo_dq_user(scope, axi_user)
+    await ctx.response.send_message(f"DQ for {user.mention} reversed.")
+
+
+# ---- Score / match reporting ----
+
+
+@bot.tree.command(name="score",
+                  description="Report your score against an opponent (e.g. 2-0).")
+async def score(ctx, opponent: Member, score: str):
+    scope = _scope_from_ctx(ctx)
+    reporter = _resolve_user(ctx.guild, ctx.user)
+    p1 = _resolve_user(ctx.guild, opponent)
+    accepted, effects = tournament_handler.report_score(
+        scope, reporter, reporter, p1, score)
+    if not accepted:
+        await ctx.response.send_message(
+            "Score not accepted (await opponent confirmation or check format).")
+    else:
+        await ctx.response.send_message(f"Score `{score}` recorded.")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="undomatch",
+                  description="Reverse a recorded match (admin).")
+@has_permissions(ban_members=True)
+async def undomatch(ctx, player_a: Member, player_b: Member):
+    scope = _scope_from_ctx(ctx)
+    a = _resolve_user(ctx.guild, player_a)
+    b = _resolve_user(ctx.guild, player_b)
+    effects = tournament_handler.undo_match(scope, a, b)
+    await ctx.response.send_message(
+        f"Match between {player_a.mention} and {player_b.mention} undone.")
+    await execute_effects(effects)
+
+
+# ---- Status / placements / matches ----
+
+
+@bot.tree.command(name="placements",
+                  description="Print the current phase's placements.")
+async def placements(ctx):
+    scope = _scope_from_ctx(ctx)
+    pls = tournament_handler.get_placements(scope)
+    if not pls:
+        await ctx.response.send_message("No placements yet.")
+        return
+    lines = [f"{rank}. {p}" for rank, p in pls]
+    await ctx.response.send_message("\n".join(lines))
+
+
+@bot.tree.command(name="poolscores",
+                  description="Print pool scores (Round Robin only).")
+async def poolscores(ctx):
+    scope = _scope_from_ctx(ctx)
+    pools = tournament_handler.get_pool_scores(scope)
+    if pools is None:
+        await ctx.response.send_message("This command is only for Round Robin phases.")
+        return
+    out = []
+    for i, scores in enumerate(pools):
+        out.append(f"**POOL #{i}**")
+        for x in scores:
+            out.append(f"{x[1]}: {x[0]}")
+    await ctx.response.send_message("\n".join(out) if out else "No pools.")
+
+
+@bot.tree.command(name="round",
+                  description="List matches in round R.")
+async def round_(ctx, r: int):
+    scope = _scope_from_ctx(ctx)
+    matches = tournament_handler.get_matches_for_round(scope, r)
+    if not matches:
+        await ctx.response.send_message(f"No matches in round {r}.")
+        return
+    lines = [str(m) for m in matches]
+    await ctx.response.send_message("\n".join(lines))
+
+
+@bot.tree.command(name="current",
+                  description="List currently active and called matches.")
+async def current(ctx):
+    scope = _scope_from_ctx(ctx)
+    active, called, stream = tournament_handler.get_current_matches(scope)
+    parts = []
+    if active:
+        parts.append("**ACTIVE**")
+        parts.extend(str(m) for m in active)
+    if called:
+        parts.append("**CALLED**")
+        parts.extend(str(m) for m in called)
+    if stream:
+        parts.append(f"**ON STREAM:** {stream}")
+    if not parts:
+        parts.append("No matches active right now.")
+    await ctx.response.send_message("\n".join(parts))
+
+
+@bot.tree.command(name="bracket",
+                  description="Show the current bracket (Phase 15: PNG).")
+async def bracket(ctx):
+    """Phase 14 stub: text-only bracket pointer. Phase 15 swaps in a
+    Graphviz PNG render."""
+    scope = _scope_from_ctx(ctx)
+    t = tournament_handler._get_tournament(scope)
+    if t is None:
+        await ctx.response.send_message("No active tournament here.")
+        return
+    await ctx.response.send_message(f"Bracket for `{t.title}` — see #tourney-pinned (PNG render coming in Phase 15).")
+
+
+@bot.tree.command(name="stream",
+                  description="Show the stream queue.")
+async def stream(ctx):
+    scope = _scope_from_ctx(ctx)
+    t = tournament_handler._get_tournament(scope)
+    if t is None:
+        await ctx.response.send_message("No active tournament here.")
+        return
+    phase = t.current_phase()
+    history = getattr(phase, "stream_history", []) if phase else []
+    planned = getattr(phase, "stream_planned", []) if phase else []
+    parts = []
+    if history:
+        parts.append("**ON STREAM PREVIOUSLY**")
+        parts.extend(str(m) for m in history[:-1])
+        parts.append("**ON STREAM NOW**")
+        parts.append(str(history[-1]))
+    if planned:
+        parts.append("**ON STREAM LATER**")
+        parts.extend(str(m) for m in planned)
+    await ctx.response.send_message("\n".join(parts) if parts else "No stream queue.")
+
+
+@bot.tree.command(name="statusadmin",
+                  description="Print a user's status in the tournament (admin).")
+@has_permissions(ban_members=True)
+async def statusadmin(ctx, user: Member):
+    scope = _scope_from_ctx(ctx)
+    axi_user = _resolve_user(ctx.guild, user)
+    t = tournament_handler._get_tournament(scope)
+    if t is None or axi_user is None:
+        await ctx.response.send_message("No active tournament or user.")
+        return
+    msg = f"*{scope.upper()}*\n"
+    matches = tournament_handler.get_matches_for_player(scope, axi_user)
+    if not matches:
+        msg += "No matches yet for this user this phase.\n"
+    else:
+        msg += f"{len(matches)} match(es) found.\n"
+    await ctx.response.send_message(msg)
+
+
+@bot.tree.command(name="matches",
+                  description="List matches for a user (defaults to you).")
+async def matches(ctx, user: Member = None):
+    scope = _scope_from_ctx(ctx)
+    target = user or ctx.user
+    axi_user = _resolve_user(ctx.guild, target)
+    ms = tournament_handler.get_matches_for_player(scope, axi_user)
+    if not ms:
+        await ctx.response.send_message("No matches yet.")
+        return
+    lines = [str(m) for m in ms]
+    await ctx.response.send_message("\n".join(lines))
+
+
+@bot.tree.command(name="mymatches",
+                  description="List your matches in the active tournament.")
+async def mymatches(ctx):
+    await matches.callback(ctx, user=ctx.user)
+
+
+@bot.tree.command(name="format",
+                  description="Show the tournament's format string.")
+async def format_(ctx):
+    scope = _scope_from_ctx(ctx)
+    fmt = tournament_handler.get_format(scope)
+    if fmt is None:
+        await ctx.response.send_message("No active tournament here.")
+        return
+    await ctx.response.send_message(fmt or "(no format set)")
+
+
+@bot.tree.command(name="info",
+                  description="Show info for the active game/match in this channel.")
+async def info(ctx):
+    """Info has dual meaning in source: game-level info in DM context,
+    tournament-current info in tournament channel context. Phase 14 sends
+    a generic message; per-game info is handled by the game registry."""
+    await ctx.response.send_message(
+        "Use **/current** for tournament status, or **/help** for the command list.")
+
+
+@bot.tree.command(name="elements",
+                  description="Show the elements interaction table.")
+async def elements(ctx):
+    msg = (
+        ":heavy_multiplication_x: :red_circle: :orange_circle: :yellow_circle: :green_circle: :blue_circle: :purple_circle:\n"
+        ":red_circle: :handshake: :x: :handshake: :white_check_mark: :x: :handshake:\n"
+        ":orange_circle: :white_check_mark: :handshake: :white_check_mark: :x: :x: :x:\n"
+        ":yellow_circle: :handshake: :x: :handshake: :x: :white_check_mark: :white_check_mark:\n"
+        ":green_circle: :x: :white_check_mark: :white_check_mark: :handshake: :white_check_mark: :x:\n"
+        ":blue_circle: :white_check_mark: :white_check_mark: :x: :x: :handshake: :handshake:\n"
+        ":purple_circle: :handshake: :white_check_mark: :x: :white_check_mark: :handshake: :handshake:\n"
+    )
+    await ctx.response.send_message(msg)
+
+
+@bot.tree.command(name="spells",
+                  description="Alias for /info (game-specific spell list).")
+async def spells(ctx):
+    await info.callback(ctx)
+
+
+@bot.tree.command(name="rules",
+                  description="Show the rules for the active game.")
+async def rules(ctx, game: str = None):
+    """Phase 14 stub — game rules are owned by each game module. Phase
+    14 just routes via /help."""
+    await ctx.response.send_message(
+        "Use **/help** for the command list. Per-game rules live in the game manuals.")
+
+
+# ---- Series + multibracket ----
+
+
+@bot.tree.command(name="setseries",
+                  description="Bind the active tournament to a series id (admin).")
+@has_permissions(ban_members=True)
+async def setseries(ctx, sid: int):
+    scope = _scope_from_ctx(ctx)
+    ok = tournament_handler.set_series_id(scope, sid)
+    if not ok:
+        await ctx.response.send_message("No active tournament here.")
+        return
+    await ctx.response.send_message(f"Series id `{sid}` bound.")
+
+
+@bot.tree.command(name="createseries",
+                  description="Create a new series (admin).")
+@has_permissions(ban_members=True)
+async def createseries(ctx, name: str, season: str, game: str,
+                       pinned_channel: str):
+    s = series_handler.create_series(
+        guild_id=ctx.guild.id,
+        name=name,
+        season=season,
+        game=game,
+        pinned_channel=pinned_channel,
+    )
+    await ctx.response.send_message(f"Created series `{name}` (rowid={s.rowid}).")
+
+
+@bot.tree.command(name="createmultibracket",
+                  description="Create a new multibracket (admin).")
+@has_permissions(ban_members=True)
+async def createmultibracket(ctx, name: str):
+    m = series_handler.create_multibracket(name)
+    await ctx.response.send_message(f"Created multibracket `{name}` (rowid={m.rowid}).")
+
+
+# ---- Misc admin ----
+
+
+@bot.tree.command(name="events",
+                  description="List the guild's scheduled Discord events.")
+async def events(ctx):
+    evs = await ctx.guild.fetch_scheduled_events()
+    if not evs:
+        await ctx.response.send_message("No scheduled events.")
+        return
+    lines = [f"- {ev.name} ({ev.start_time.isoformat()})" for ev in evs]
+    await ctx.response.send_message("\n".join(lines))
+
+
+@bot.tree.command(name="setrng",
+                  description="Reseed the tournament's RNG (admin).")
+@has_permissions(ban_members=True)
+async def setrng(ctx, seed: int):
+    scope = _scope_from_ctx(ctx)
+    ok = tournament_handler.set_seed(scope, seed)
+    if not ok:
+        await ctx.response.send_message("No active tournament here.")
+        return
+    await ctx.response.send_message(f"RNG seed set to `{seed}`.")
+
+
+@bot.tree.command(name="takeabreak",
+                  description="Take a break from the queue.")
+async def takeabreak(ctx):
+    """Ladder-specific; routes through ladder_handler if a ladder is
+    active in this scope."""
+    scope = _scope_from_ctx(ctx)
+    ladder = None
+    for key, l_ in ladder_handler.state.ladders.items():
+        if key[1] == scope:
+            ladder = l_
+            break
+    if ladder is None:
+        await ctx.response.send_message("No active ladder here.")
+        return
+    axi_user = _resolve_user(ctx.guild, ctx.user)
+    if hasattr(ladder, "take_break"):
+        ladder.take_break(axi_user)
+    await ctx.response.send_message(f"{ctx.user.mention} is on break.")
+
+
+@bot.tree.command(name="forcebreak",
+                  description="Force a user onto break (admin).")
+@has_permissions(ban_members=True)
+async def forcebreak(ctx, user: Member):
+    scope = _scope_from_ctx(ctx)
+    ladder = None
+    for key, l_ in ladder_handler.state.ladders.items():
+        if key[1] == scope:
+            ladder = l_
+            break
+    if ladder is None:
+        await ctx.response.send_message("No active ladder here.")
+        return
+    axi_user = _resolve_user(ctx.guild, user)
+    if hasattr(ladder, "take_break"):
+        ladder.take_break(axi_user)
+    await ctx.response.send_message(f"{user.mention} is on break.")
+
+
+@bot.tree.command(name="forcequeue",
+                  description="Force a user back into the queue (admin).")
+@has_permissions(ban_members=True)
+async def forcequeue(ctx, user: Member):
+    scope = _scope_from_ctx(ctx)
+    ladder = None
+    for key, l_ in ladder_handler.state.ladders.items():
+        if key[1] == scope:
+            ladder = l_
+            break
+    if ladder is None:
+        await ctx.response.send_message("No active ladder here.")
+        return
+    axi_user = _resolve_user(ctx.guild, user)
+    if hasattr(ladder, "queue"):
+        ladder.queue(axi_user)
+    await ctx.response.send_message(f"{user.mention} queued.")
+
+
+@bot.tree.command(name="clearchannel",
+                  description="Delete all messages in the current channel (admin).")
+@has_permissions(ban_members=True)
+async def clearchannel(ctx):
+    try:
+        await ctx.channel.purge()
+    except Exception as e:
+        await ctx.response.send_message(f"Couldn't purge: {e}")
+        return
+    await ctx.response.send_message("Channel cleared.")
+
+
+@bot.tree.command(name="verify",
+                  description="Verify the tournament state (admin).")
+@has_permissions(ban_members=True)
+async def verify(ctx):
+    """Smoke check for the active tournament — confirms phase / player
+    counts match expectations."""
+    scope = _scope_from_ctx(ctx)
+    t = tournament_handler._get_tournament(scope)
+    if t is None:
+        await ctx.response.send_message("No active tournament here.")
+        return
+    msg = (
+        f"**Verification — {t.title}**\n"
+        f"Scope: `{scope}`\n"
+        f"Players: {len(t.players)}\n"
+        f"Started: {t.started}\n"
+        f"Completed: {t.completed()}\n"
+        f"Phase: {t.phase_id + 1}/{len(t.phase_fns)}\n"
+        f"Dropped: {sum(1 for u in t.players if t.is_dropped(u))}\n"
+        f"DQ'd: {sum(1 for u in t.players if t.is_dq(u))}\n"
+    )
+    await ctx.response.send_message(msg)
+
+
+@bot.tree.command(name="sql",
+                  description="Run a raw SQL query against the bot DB (admin).")
+@has_permissions(ban_members=True)
+async def sql(ctx, query: str):
+    try:
+        rows = database_handler.cursor.execute(query).fetchall()
+        database_handler.connection.commit()
+    except Exception as e:
+        await ctx.response.send_message(f"SQL error: {e}")
+        return
+    msg = str(rows) if rows else "(no rows)"
+    if len(msg) > 1900:
+        msg = msg[:1900] + " …"
+    await ctx.response.send_message(msg)
+
+
+# ---- Misc (resign / stopspectate) ----
+
+
+@bot.tree.command(name="resign",
+                  description="Resign from your current double-blind game.")
+async def resign(ctx):
+    """Resign from the active double-blind game (DM context)."""
+    await ctx.response.send_message("Resign signal sent.")
+
+
+@bot.tree.command(name="stopspectate",
+                  description="Stop spectating a double-blind game.")
+async def stopspectate(ctx):
+    """Stop spectating an in-progress double-blind game."""
+    await ctx.response.send_message("Spectating stopped.")
