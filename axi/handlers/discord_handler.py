@@ -30,6 +30,7 @@ from axi.effects import (
     MentionReactors, EditScheduledEventDescription,
     AnnounceTourneyStart, AnnouncePhaseStart, AnnouncePhaseEnd,
     AnnounceTourneyEnd,
+    DotRenderUpload,
 )
 import axi.handlers.checkin_handler as checkin_handler
 import axi.handlers.pxl_handler as pxl_handler  # noqa: F401 — registers callbacks at import
@@ -339,6 +340,45 @@ async def execute_effects(effects):
                 continue
             msg = f"**Congratulations to {effect.winner_mention} for winning {effect.title}!**"
             await send_long(channel, msg)
+
+        # ---- Phase 15: bracket visualization ----
+
+        elif isinstance(effect, DotRenderUpload):
+            guild = bot.get_guild(effect.guild_id)
+            if not guild:
+                continue
+            channel = get(guild.channels, name=effect.channel_name)
+            if not channel:
+                continue
+            import os
+            import tempfile
+            try:
+                import graphviz
+            except ImportError:
+                await send_long(
+                    channel,
+                    "Bracket rendering requires the `graphviz` package "
+                    "(install graphviz-system-binary + `pip install graphviz`).",
+                )
+                continue
+            try:
+                with tempfile.NamedTemporaryFile(
+                        suffix=".gv", delete=False) as f:
+                    dot_path = f.name
+                src = graphviz.Source(effect.dot_source, filename=dot_path)
+                src.format = "png"
+                out_path = src.render(cleanup=True)
+                await send_long(channel, effect.title or "", file=out_path)
+                try:
+                    os.unlink(out_path)
+                except Exception:
+                    pass
+                try:
+                    os.unlink(dot_path)
+                except Exception:
+                    pass
+            except Exception as e:
+                await send_long(channel, f"Couldn't render bracket: {e}")
 
 
 def _get_tournament_for_scope(scope):
@@ -1556,15 +1596,15 @@ async def round_(ctx, r: int):
     await ctx.response.send_message("\n".join(lines))
 
 
-@bot.tree.command(name="current",
-                  description="List currently active and called matches.")
-async def current(ctx):
+@bot.tree.command(name="active",
+                  description="List currently active and called matches (text).")
+async def active(ctx):
     scope = _scope_from_ctx(ctx)
-    active, called, stream = tournament_handler.get_current_matches(scope)
+    active_, called, stream = tournament_handler.get_current_matches(scope)
     parts = []
-    if active:
+    if active_:
         parts.append("**ACTIVE**")
-        parts.extend(str(m) for m in active)
+        parts.extend(str(m) for m in active_)
     if called:
         parts.append("**CALLED**")
         parts.extend(str(m) for m in called)
@@ -1576,16 +1616,33 @@ async def current(ctx):
 
 
 @bot.tree.command(name="bracket",
-                  description="Show the current bracket (Phase 15: PNG).")
+                  description="Show the current bracket as a Graphviz PNG.")
 async def bracket(ctx):
-    """Phase 14 stub: text-only bracket pointer. Phase 15 swaps in a
-    Graphviz PNG render."""
+    """Render the current phase's MatchGraph as a Graphviz PNG and
+    post it to the channel."""
     scope = _scope_from_ctx(ctx)
     t = tournament_handler._get_tournament(scope)
     if t is None:
         await ctx.response.send_message("No active tournament here.")
         return
-    await ctx.response.send_message(f"Bracket for `{t.title}` — see #tourney-pinned (PNG render coming in Phase 15).")
+    dot = t.visualize()
+    if not dot:
+        await ctx.response.send_message("No phase started yet.")
+        return
+    effects = [DotRenderUpload(
+        guild_id=ctx.guild.id,
+        channel_name=ctx.channel.name,
+        dot_source=dot,
+        title=f"**{t.title}** — bracket",
+    )]
+    await ctx.response.send_message("Rendering bracket…")
+    await execute_effects(effects)
+
+
+@bot.tree.command(name="current",
+                  description="Alias for /bracket.")
+async def current(ctx):
+    await bracket.callback(ctx)
 
 
 @bot.tree.command(name="stream",

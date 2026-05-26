@@ -82,6 +82,8 @@ class Tournament:
             return []
         self.started = True
         self.assign_player_colors()
+        # Phase 15: seed_by_player for bracket projection.
+        self.seed_by_player = {p: i for i, p in enumerate(self.players)}
         self.placements = [(-1, p) for p in self.players]
         self.phase_id = -1
         return self.advance_phase()
@@ -223,8 +225,15 @@ class Tournament:
             self.player_colors[p] = (int(r * 255), int(g * 255), int(b * 255))
 
     def visualize(self):
-        """Stub for Phase 15 — Graphviz DOT generation lives there."""
-        return None
+        """Return Graphviz DOT source for the current phase (Phase 15).
+
+        Returns None if no phase has started yet. The Discord adapter
+        renders the DOT to PNG via the `graphviz` package.
+        """
+        phase = self.current_phase()
+        if phase is None:
+            return None
+        return phase.visualize(self)
 
     def save_checkpoint(self):
         """Persist current tournament state. Phase 10 implementation."""

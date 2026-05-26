@@ -414,3 +414,14 @@ class MatchGraph(ABC):
 
     def completed(self):
         return self.victory_node is not None and self.victory_node.completed()
+
+    def visualize(self, tournament=None):
+        """Return Graphviz DOT source for this graph (Phase 15).
+
+        `tournament` provides player_colors + seed_by_player; falls back
+        to self.tournament if not supplied.
+        """
+        from axi.handlers import bracket_viz
+        t = tournament if tournament is not None else getattr(
+            self, "tournament", None)
+        return bracket_viz.dot_source(self, t)

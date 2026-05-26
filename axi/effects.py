@@ -231,3 +231,22 @@ class AnnounceTourneyEnd:
     channel_name: str
     title: str
     winner_mention: str
+
+
+# ---------------------------------------------------------------------------
+# Phase 15: Bracket visualization effect
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class DotRenderUpload:
+    """Render a Graphviz DOT source to PNG and post to a channel.
+
+    The adapter writes the DOT to a tempfile, runs
+    `graphviz.Source(dot_str).render(format='png')`, then uploads the
+    resulting PNG to the target channel.
+    """
+    guild_id: int
+    channel_name: str
+    dot_source: str                  # the DOT source string
+    title: str = None                # optional message text above the image

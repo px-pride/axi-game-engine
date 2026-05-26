@@ -9,6 +9,7 @@ dependencies = [
     "numpy",
     "openskill>=2.4,<3",
     "pytimeparse",
+    "graphviz",
 ]
 
 [project.optional-dependencies]
